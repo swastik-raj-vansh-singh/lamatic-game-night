@@ -3,12 +3,16 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Song } from '@/lib/types';
 
+/** Where a play command started and where it will stop (null: plays until paused). */
+export type PlayRange = { from: number; until: number | null };
+
 export type SongPlayerHandle = {
-  play(): void;
+  play(): PlayRange | null;
   pause(): void;
   stop(): void;
-  restart(): void;
-  playAnswer(): void;
+  restart(): PlayRange | null;
+  playAnswer(): PlayRange | null;
+  now(): number;
 };
 
 type Status = 'loading' | 'idle' | 'playing' | 'paused' | 'ended' | 'error' | 'nosource' | 'notimed';
@@ -147,6 +151,28 @@ export function useMediaSource(source: string, box: React.RefObject<HTMLDivEleme
       if (ytId) yt.current?.pauseVideo?.();
       else audio.current?.pause();
     },
+    /** Call from a tap so the browser allows sound later without another tap. */
+    unlock: () => {
+      if (ytId) {
+        const p = yt.current;
+        if (p) {
+          p.playVideo();
+          setTimeout(() => p.pauseVideo(), 120);
+        }
+        return;
+      }
+      const a = audio.current;
+      if (!a) return;
+      a.muted = true;
+      a.play()
+        .then(() => {
+          a.pause();
+          a.muted = false;
+        })
+        .catch(() => {
+          a.muted = false;
+        });
+    },
   };
   return api;
 }
@@ -203,22 +229,20 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
   }, []);
 
   const begin = useCallback(
-    (from: number | null, until: number) => {
+    (from: number | null, until: number | null): PlayRange | null => {
       if (!song || !song.source.trim()) {
         set('nosource');
-        return;
+        return null;
       }
-      if (!(song.stop > song.start)) {
-        set('notimed');
-        return;
-      }
+      const start = from ?? mediaRef.current.now();
       if (from !== null) mediaRef.current.seek(from);
-      endAt.current = until;
+      endAt.current = until ?? 0;
       startedAt.current = performance.now();
       mediaRef.current.play();
       set('playing');
       cancelAnimationFrame(raf.current);
       raf.current = requestAnimationFrame(loop);
+      return { from: Math.round(start * 100) / 100, until };
     },
     [song, loop],
   );
@@ -229,11 +253,12 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
     ref,
     () => ({
       play() {
-        if (!song) return;
+        if (!song) return null;
+        const timed = song.stop > song.start;
         const t = mediaRef.current.now();
         const st = statusRef.current;
-        const fresh = st !== 'paused' || t < song.start - 0.2 || t >= song.stop - 0.05;
-        begin(fresh ? song.start : null, song.stop);
+        const fresh = st !== 'paused' || t < song.start - 0.2 || (timed && t >= song.stop - 0.05);
+        return begin(fresh ? song.start : null, timed ? song.stop : null);
       },
       pause() {
         if (statusRef.current !== 'playing') return;
@@ -251,10 +276,13 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
         set(song && !(song.stop > song.start) ? 'notimed' : 'idle');
       },
       restart() {
-        if (song) begin(song.start, song.stop);
+        return song ? begin(song.start, song.stop > song.start ? song.stop : null) : null;
       },
       playAnswer() {
-        if (song) begin(song.stop, song.stop + ANSWER_SECONDS);
+        return song && song.stop > song.start ? begin(song.stop, song.stop + ANSWER_SECONDS) : null;
+      },
+      now() {
+        return mediaRef.current.now();
       },
     }),
     [song, begin],
@@ -270,7 +298,7 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
     ended: 'Stopped before the line',
     error: 'Could not play this song. Check its link in Answer sheet → Songs.',
     nosource: 'No song set for this round. Add one in Answer sheet → Songs.',
-    notimed: 'Stop time not set. Open Answer sheet → Songs → Set timing.',
+    notimed: 'No stop time set: it will play until you press Pause. Set one in Answer sheet → Songs.',
   };
 
   return (
@@ -278,7 +306,7 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
       {media.isYouTube && <div className="yt-box" ref={box} />}
       <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
         <span className="eyebrow">Song clip</span>
-        <span style={{ fontWeight: 700, color: status === 'error' || status === 'nosource' || status === 'notimed' ? 'var(--coral)' : undefined }}>
+        <span style={{ fontWeight: 700, color: status === 'error' || status === 'nosource' ? 'var(--coral)' : status === 'notimed' ? 'var(--bulb)' : undefined }}>
           {label[status]}
         </span>
         <span className="row" style={{ gap: 8 }}>

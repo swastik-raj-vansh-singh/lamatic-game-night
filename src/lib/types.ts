@@ -34,6 +34,12 @@ export type Attempt = {
   result: 'pending' | 'correct' | 'wrong';
 };
 
+/** What players' devices need to play the clip: the link and timing, never the answer. */
+export type Clip = { source: string; start: number; stop: number };
+
+/** The host's latest play/pause command. Each new command has a higher `seq`. */
+export type Playback = { status: 'playing' | 'paused' | 'stopped'; from: number; until: number | null; seq: number };
+
 export type RoundState = {
   index: number;
   key: string;
@@ -42,6 +48,8 @@ export type RoundState = {
   reveal: { title: string; artist: string; line: string } | null;
   double: boolean;
   awarded: { playerId: string; pts: number } | null;
+  clip: Clip | null;
+  playback: Playback | null;
 };
 
 export type GameState = {
@@ -51,6 +59,8 @@ export type GameState = {
   round: RoundState;
   totalRounds: number;
   winnerId: string | null;
+  /** Play the songs on every player's own device (true) or only on the Stage (false). */
+  playOnDevices: boolean;
   /** Accounts that opened the Stage or Answer sheet. They run the game and are hidden from player lists. */
   hostIds: string[];
   version: number;

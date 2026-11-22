@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PrizeReveal, celebrate } from '@/components/PrizeReveal';
-import { SongPlayer, type SongPlayerHandle } from '@/components/SongPlayer';
+import { SongPlayer, type PlayRange, type SongPlayerHandle } from '@/components/SongPlayer';
 import { Wheel } from '@/components/Wheel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
 import { Bulbs, ConfirmButton, DemoBanner, Loading, SoundToggle } from '@/components/ui';
@@ -24,7 +24,9 @@ import {
   roundFinished,
   roundWinner,
   setGame1Link,
+  setClip,
   setGame1Podium,
+  setPlayback,
   setPhase,
   songReady,
 } from '@/lib/game';
@@ -155,6 +157,12 @@ export default function StagePage() {
   useBuzzEngine(game, buzzes, apply);
   useRegisterHost(game, user?.id, apply);
 
+  // Share the current song's link and timing so players' phones load it before Play.
+  useEffect(() => {
+    if (!game || game.phase !== 'round' || !songs.length) return;
+    void apply(s => (s.phase === 'round' ? setClip(s, songs.find(x => x.round === s.round.index + 1)) : null));
+  }, [game?.phase, game?.round.key, songs, apply]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Someone buzzed: stop the music.
   const answeringSeq = game?.round.status === 'answering' ? game.round.attempts.length : 0;
   useEffect(() => {
@@ -213,10 +221,31 @@ export default function StagePage() {
       return setPhase(s, phase);
     });
 
+  // Every play/pause on the Stage is also sent to players' phones.
+  const sendPlay = (range: PlayRange | null) =>
+    apply(s => {
+      let n = s.phase === 'round' && s.round.status === 'ready' ? openBuzzers(s) : s;
+      n = setClip(n, song) ?? n;
+      return range ? setPlayback(n, 'playing', range.from, range.until) : n;
+    });
   const play = async () => {
     sfx.unlock();
-    if (game.phase === 'round' && r.status === 'ready') await apply(openBuzzers);
-    player.current?.play();
+    await sendPlay(player.current?.play() ?? null);
+  };
+  const pause = () => {
+    player.current?.pause();
+    void apply(s => setPlayback(s, 'paused'));
+  };
+  const stop = () => {
+    player.current?.stop();
+    void apply(s => setPlayback(s, 'stopped'));
+  };
+  const restart = async () => {
+    await sendPlay(player.current?.restart() ?? null);
+  };
+  const playAnswer = async () => {
+    const range = player.current?.playAnswer() ?? null;
+    if (range) await apply(s => setPlayback(s, 'playing', range.from, range.until));
   };
 
   return (
@@ -274,12 +303,33 @@ export default function StagePage() {
             <div style={{ display: 'grid', gap: 16 }}>
               <RoundHeader game={game} />
               <RoundStatusBoard game={game} players={players} />
-              {!songReady(song) && r.status === 'ready' && (
-                <p className="error">This song isn&apos;t ready yet. Open the Answer sheet → Songs to add the link and stop time.</p>
+              {r.status === 'ready' && !song?.source.trim() && (
+                <p className="error">This song has no link yet. Open the Answer sheet → Songs to add one.</p>
+              )}
+              {r.status === 'ready' && !!song?.source.trim() && !songReady(song) && (
+                <p className="hint">This song has no stop time yet, so press Pause yourself right before the line. Set one in Answer sheet → Songs → Set timing.</p>
               )}
             </div>
             <div style={{ display: 'grid', gap: 16 }}>
               <SongPlayer ref={player} song={song} />
+              <div className="card" style={{ gap: 10 }}>
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <h3>Song plays on</h3>
+                  <div className="tabs" role="group" aria-label="Where the song plays">
+                    <button type="button" aria-selected={game.playOnDevices} onClick={() => apply(s => ({ ...s, playOnDevices: true }))}>
+                      Everyone&apos;s phones
+                    </button>
+                    <button type="button" aria-selected={!game.playOnDevices} onClick={() => apply(s => ({ ...s, playOnDevices: false }))}>
+                      Only this screen
+                    </button>
+                  </div>
+                </div>
+                <p className="hint">
+                  {game.playOnDevices
+                    ? 'Each player hears the song on their own device and it stops there when someone buzzes. On Meet, share this tab without tab audio so nobody hears it twice.'
+                    : 'Only this screen plays the song. On Meet, share this tab with "Also share tab audio" turned on.'}
+                </p>
+              </div>
               <BuzzList game={game} players={players} buzzes={buzzes} limit={8} />
               <LiveBoard game={game} players={contestants} limit={6} />
             </div>
@@ -389,13 +439,13 @@ export default function StagePage() {
                     <button type="button" className="teal" onClick={play}>
                       ▶ Play
                     </button>
-                    <button type="button" className="ghost" onClick={() => player.current?.pause()}>
+                    <button type="button" className="ghost" onClick={pause}>
                       ❚❚ Pause
                     </button>
-                    <button type="button" className="ghost" onClick={() => player.current?.stop()}>
+                    <button type="button" className="ghost" onClick={stop}>
                       ■ Stop
                     </button>
-                    <button type="button" className="ghost" onClick={() => player.current?.restart()}>
+                    <button type="button" className="ghost" onClick={restart}>
                       ↺ Restart
                     </button>
                   </>
@@ -435,7 +485,7 @@ export default function StagePage() {
                   </button>
                 )}
                 {r.status === 'revealed' && (
-                  <button type="button" className="ghost" onClick={() => player.current?.playAnswer()}>
+                  <button type="button" className="ghost" onClick={playAnswer}>
                     ▶ Play the real line
                   </button>
                 )}

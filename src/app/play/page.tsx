@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PrizeReveal } from '@/components/PrizeReveal';
+import { useMediaSource } from '@/components/SongPlayer';
 import { Wheel } from '@/components/Wheel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
 import Link from 'next/link';
@@ -10,7 +11,7 @@ import { getBackend } from '@/lib/backend';
 import { currentAttempt, playersOnly, sortBuzzes } from '@/lib/game';
 import { useBuzzes, useGameState, useGate, useWheel } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
-import type { Buzz, GameState, Player } from '@/lib/types';
+import type { Buzz, GameState, Playback, Player } from '@/lib/types';
 
 function BuzzerPad({ game, me, buzzes }: { game: GameState; me: Player; buzzes: Buzz[] }) {
   const r = game.round;
@@ -115,6 +116,133 @@ function BuzzerPad({ game, me, buzzes }: { game: GameState; me: Player; buzzes: 
   );
 }
 
+/**
+ * Plays the song on this player's own device, following the host's Play/Pause.
+ * It stops by itself when someone buzzes.
+ */
+function PlayerAudio({ game }: { game: GameState }) {
+  const r = game.round;
+  const clip = game.playOnDevices ? r.clip : null;
+  const pb = r.playback;
+  const box = useRef<HTMLDivElement>(null);
+  const media = useMediaSource(clip?.source ?? '', box, clip?.start ?? 0);
+  const m = useRef(media);
+  m.current = media;
+  const [state, setState] = useState<'waiting' | 'playing' | 'paused'>('waiting');
+  const [unlocked, setUnlocked] = useState(false);
+  const seen = useRef<number>(pb?.seq ?? 0); // don't replay a command from before this page opened
+  const pending = useRef<Playback | null>(null);
+  const raf = useRef(0);
+
+  const halt = () => {
+    cancelAnimationFrame(raf.current);
+    pending.current = null;
+    m.current.pause();
+  };
+  const run = (cmd: Playback) => {
+    cancelAnimationFrame(raf.current);
+    if (cmd.status !== 'playing') {
+      m.current.pause();
+      setState('paused');
+      return;
+    }
+    m.current.seek(cmd.from);
+    m.current.play();
+    setState('playing');
+    const started = performance.now();
+    const loop = () => {
+      if (cmd.until && performance.now() - started > 400 && m.current.now() >= cmd.until - 0.03) {
+        m.current.pause();
+        setState('paused');
+        return;
+      }
+      raf.current = requestAnimationFrame(loop);
+    };
+    raf.current = requestAnimationFrame(loop);
+  };
+
+  // A new command from the host.
+  useEffect(() => {
+    if (!pb || !clip || pb.seq <= seen.current) return;
+    seen.current = pb.seq;
+    if (pb.status === 'playing' && r.status === 'answering') return;
+    if (!m.current.ready) {
+      pending.current = pb;
+      return;
+    }
+    run(pb);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pb?.seq, !!clip]);
+
+  // A command that arrived while the song was still loading.
+  useEffect(() => {
+    if (media.ready && pending.current) {
+      const c = pending.current;
+      pending.current = null;
+      run(c);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media.ready]);
+
+  // Someone buzzed, the song ended, or the host switched to "only this screen".
+  useEffect(() => {
+    if (r.status === 'answering' || r.status === 'won' || r.status === 'failed' || !game.playOnDevices) {
+      halt();
+      setState(s => (s === 'waiting' ? s : 'paused'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r.status, r.attempts.length, game.playOnDevices]);
+
+  // New song: start fresh.
+  useEffect(() => {
+    halt();
+    setState('waiting');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r.key]);
+
+  // Any tap on the page lets the browser play sound later.
+  useEffect(() => {
+    if (unlocked) return;
+    const onTap = () => {
+      m.current.unlock();
+      setUnlocked(true);
+    };
+    document.addEventListener('pointerdown', onTap, { once: true });
+    return () => document.removeEventListener('pointerdown', onTap);
+  }, [unlocked]);
+
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+
+  if (!clip) return null;
+  return (
+    <section className="card" aria-label="Song on this device">
+      <div className="row" style={{ alignItems: 'center' }}>
+        {media.isYouTube && <div className="yt-box" ref={box} />}
+        <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+          <span className="eyebrow">Song on this phone</span>
+          <b>
+            {media.failed
+              ? 'This song does not play here. Listen on Meet.'
+              : !media.ready
+                ? 'Loading the song…'
+                : state === 'playing'
+                  ? '♪ Playing'
+                  : state === 'paused'
+                    ? 'Paused'
+                    : 'Ready. It plays when the host presses Play.'}
+          </b>
+          {media.isYouTube && <span className="hint">On iPhone, if you hear nothing, tap the video once.</span>}
+        </div>
+      </div>
+      {!unlocked && (
+        <button type="button" className="teal" onClick={() => undefined}>
+          🔊 Tap to turn on sound
+        </button>
+      )}
+    </section>
+  );
+}
+
 function WheelPhase({ game, me, players }: { game: GameState; me: Player; players: Player[] }) {
   const { spin, fresh } = useWheel();
   const [local, setLocal] = useState<{ segment: number } | null>(null);
@@ -216,6 +344,7 @@ export default function PlayPage() {
             <RoundHeader game={game} />
             <RoundStatusBoard game={game} players={players} meId={me.id} />
             <BuzzerPad game={game} me={me} buzzes={buzzes} />
+            <PlayerAudio game={game} />
             <BuzzList game={game} players={players} buzzes={buzzes} limit={6} />
             <LiveBoard game={game} players={visible} meId={me.id} />
           </>

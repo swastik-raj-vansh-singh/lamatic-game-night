@@ -1,4 +1,4 @@
-import type { Attempt, Buzz, GameState, Player, RoundState, Song } from './types';
+import type { Attempt, Buzz, GameState, Player, Playback, RoundState, Song } from './types';
 import { TRIAL_SONGS } from './songLists';
 
 export const TOTAL_ROUNDS = 10;
@@ -38,6 +38,8 @@ export function freshRound(index: number, total: number, key?: string): RoundSta
     reveal: null,
     double: index === total - 1,
     awarded: null,
+    clip: null,
+    playback: null,
   };
 }
 
@@ -49,6 +51,7 @@ export function initialState(): GameState {
     round: freshRound(0, TOTAL_ROUNDS, '1-start'),
     totalRounds: TOTAL_ROUNDS,
     winnerId: null,
+    playOnDevices: true,
     hostIds: [],
     version: 0,
   };
@@ -74,6 +77,7 @@ export function normalizeState(raw: unknown): GameState {
     game1: { ...base.game1, ...(r.game1 ?? {}), podium: Array.isArray(r.game1?.podium) ? r.game1!.podium : [] },
     round,
     points: r.points ?? {},
+    playOnDevices: r.playOnDevices !== false,
     hostIds: Array.isArray(r.hostIds) ? r.hostIds.filter(x => typeof x === 'string') : [],
     version: typeof r.version === 'number' ? r.version : 0,
   };
@@ -177,6 +181,21 @@ export function revealAnswer(s: GameState, song: Song | undefined): GameState {
     ...base,
     round: { ...base.round, status: 'revealed', reveal: { title: song?.title ?? '', artist: song?.artist ?? '', line: song?.line ?? '' } },
   };
+}
+
+/** Share the current song's link and timing with players' devices so they can load it early. */
+export function setClip(s: GameState, song: Song | null | undefined): GameState | null {
+  const clip = song && song.source.trim() ? { source: song.source.trim(), start: song.start, stop: song.stop } : null;
+  const cur = s.round.clip;
+  if ((!clip && !cur) || (clip && cur && clip.source === cur.source && clip.start === cur.start && clip.stop === cur.stop)) return null;
+  return { ...s, round: { ...s.round, clip } };
+}
+
+/** A play/pause command that every player's device follows. */
+export function setPlayback(s: GameState, status: Playback['status'], from = 0, until: number | null = null): GameState {
+  // The saved state's next version: unique and always increasing, even across songs.
+  const seq = (s.version ?? 0) + 1;
+  return { ...s, round: { ...s.round, playback: { status, from, until, seq } } };
 }
 
 export function roundWinner(r: RoundState): Attempt | null {
