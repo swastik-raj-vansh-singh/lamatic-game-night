@@ -72,6 +72,9 @@ export default function Landing() {
           )}
           <Bulbs />
         </div>
+        <Link href="/privacy" className="muted" style={{ position: 'absolute', bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))', fontSize: '0.85rem' }}>
+          Privacy policy
+        </Link>
       </main>
     </>
   );
