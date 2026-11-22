@@ -1,6 +1,6 @@
 'use client';
 
-import { AVATARS, isAllowedEmail, EMAIL_DOMAIN } from '../config';
+import { AVATARS, isValidEmail } from '../config';
 import { placeholderSongs, randomId } from '../game';
 import type { AuthUser, Buzz, GameState, Player, Song, WheelSpin } from '../types';
 import type { Backend, Result, RoundLog, Unsubscribe } from './types';
@@ -114,7 +114,7 @@ class DemoBackend implements Backend {
   }
 
   async signInDemo(email: string, asHost: boolean): Promise<Result> {
-    if (!isAllowedEmail(email)) return { error: `Use an @${EMAIL_DOMAIN} email address.` };
+    if (!isValidEmail(email)) return { error: 'Enter a valid email address.' };
     const clean = email.trim().toLowerCase();
     const existing = this.read().players.find(p => p.email === clean);
     const me: Me = { id: existing?.id ?? `demo-${randomId(8)}`, email: clean, host: asHost };
@@ -291,7 +291,7 @@ class DemoBackend implements Backend {
       if (taken.has(display)) continue;
       db.players.push({
         id: `bot-${randomId(8)}`,
-        email: `${name.toLowerCase()}@${EMAIL_DOMAIN}`,
+        email: `${name.toLowerCase()}@example.com`,
         displayName: display,
         avatar: AVATARS[(added * 5) % AVATARS.length],
         joinedAt: new Date(Date.now() + added).toISOString(),

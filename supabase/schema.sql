@@ -8,16 +8,19 @@
 -- 1. Who may join, and who is the host
 -- ---------------------------------------------------------------------
 
--- The only email domain allowed to sign in. Change it here AND in the
--- NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN environment variable.
-create or replace function public.allowed_email_domain()
-returns text language sql immutable as $$ select 'lamatic.ai'::text $$;
+-- Anyone who signs in (any email or Google account) can play.
+-- These lines also remove the old "@lamatic.ai only" lock if an earlier
+-- version of this file was run.
+drop trigger if exists enforce_email_domain on auth.users;
+drop function if exists public.enforce_email_domain();
 
-create or replace function public.email_is_allowed(p_email text)
-returns boolean language sql immutable as $$
-  select p_email is not null
-     and right(lower(p_email), length(public.allowed_email_domain()) + 1) = '@' || public.allowed_email_domain();
+create or replace function public.is_member()
+returns boolean language sql stable as $$
+  select auth.uid() is not null;
 $$;
+
+drop function if exists public.email_is_allowed(text);
+drop function if exists public.allowed_email_domain();
 
 -- Hosts can run the game (stage + host console). Add your email at the bottom of this file.
 create table if not exists public.hosts (
@@ -33,26 +36,6 @@ returns boolean language sql stable security definer set search_path = public as
     where lower(h.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
   );
 $$;
-
-create or replace function public.is_member()
-returns boolean language sql stable as $$
-  select public.email_is_allowed(auth.jwt() ->> 'email');
-$$;
-
--- Block sign-ups from any other email domain, for every sign-in method.
-create or replace function public.enforce_email_domain()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if not public.email_is_allowed(new.email) then
-    raise exception 'Only @% email addresses can join game night', public.allowed_email_domain();
-  end if;
-  return new;
-end $$;
-
-drop trigger if exists enforce_email_domain on auth.users;
-create trigger enforce_email_domain
-  before insert or update of email on auth.users
-  for each row execute function public.enforce_email_domain();
 
 -- ---------------------------------------------------------------------
 -- 2. Players: one row per signed-in person, with the name they picked
@@ -282,6 +265,6 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- 9. Make yourself the host: put your own @lamatic.ai email here, then run.
+-- 9. Make yourself the host: put the email you sign in with here, then run.
 -- ---------------------------------------------------------------------
--- insert into public.hosts (email) values ('your.name@lamatic.ai') on conflict do nothing;
+-- insert into public.hosts (email) values ('you@example.com') on conflict do nothing;

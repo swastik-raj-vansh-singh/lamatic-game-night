@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { EMAIL_DOMAIN, SUPABASE_ANON_KEY, SUPABASE_URL, isAllowedEmail } from '../config';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, isValidEmail } from '../config';
 import { randomId } from '../game';
 import type { AuthUser, Buzz, GameState, Player, Song, WheelSpin } from '../types';
 import type { Backend, Result, RoundLog, Unsubscribe } from './types';
@@ -79,19 +79,18 @@ class SupabaseBackend implements Backend {
       provider: 'google',
       options: {
         redirectTo: this.callbackUrl(next),
-        queryParams: { hd: EMAIL_DOMAIN, prompt: 'select_account' },
+        queryParams: { prompt: 'select_account' },
       },
     });
     return { error: error?.message };
   }
 
   async signInWithEmail(email: string, next: string): Promise<Result> {
-    if (!isAllowedEmail(email)) return { error: `Use your @${EMAIL_DOMAIN} email address.` };
+    if (!isValidEmail(email)) return { error: 'Enter a valid email address.' };
     const { error } = await this.sb.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { emailRedirectTo: this.callbackUrl(next), shouldCreateUser: true },
     });
-    if (error && /database error/i.test(error.message)) return { error: `Only @${EMAIL_DOMAIN} accounts can join.` };
     return { error: error?.message };
   }
 

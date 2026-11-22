@@ -5,14 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { Bulbs, DemoBanner } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
-import { DEMO, EMAIL_DOMAIN, isAllowedEmail } from '@/lib/config';
+import { DEMO, isValidEmail } from '@/lib/config';
 import { useAuth } from '@/lib/hooks';
 
 function errorText(code: string | null): string | null {
   if (!code) return null;
-  if (code === 'domain' || /database error|saving new user|email addresses can join/i.test(code)) {
-    return `Only @${EMAIL_DOMAIN} accounts can join game night. Sign in with your work email.`;
-  }
   return code;
 }
 
@@ -31,7 +28,7 @@ function LoginInner() {
   }, []);
 
   useEffect(() => {
-    if (!loading && user && isAllowedEmail(user.email)) router.replace('/join');
+    if (!loading && user) router.replace('/join');
   }, [loading, user, router]);
 
   const b = getBackend();
@@ -49,8 +46,8 @@ function LoginInner() {
   async function emailLink(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!isAllowedEmail(email)) {
-      setError(`Use your @${EMAIL_DOMAIN} email address.`);
+    if (!isValidEmail(email)) {
+      setError('Enter a valid email address.');
       return;
     }
     setBusy(true);
@@ -76,7 +73,7 @@ function LoginInner() {
           <div style={{ display: 'grid', gap: 6, textAlign: 'center' }}>
             <p className="eyebrow">Lamatic Game Night</p>
             <h2>Sign in to play</h2>
-            <p className="muted">Only @{EMAIL_DOMAIN} emails can get in.</p>
+            <p className="muted">Use any email or Google account.</p>
           </div>
 
           {sent ? (
@@ -101,13 +98,13 @@ function LoginInner() {
               )}
               <form onSubmit={emailLink} style={{ display: 'grid', gap: 12 }} noValidate>
                 <div className="field">
-                  <label htmlFor="email">Work email</label>
+                  <label htmlFor="email">Email</label>
                   <input
                     id="email"
                     type="email"
                     inputMode="email"
                     autoComplete="email"
-                    placeholder={`you@${EMAIL_DOMAIN}`}
+                    placeholder="you@example.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required

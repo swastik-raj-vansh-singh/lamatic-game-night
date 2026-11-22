@@ -2,7 +2,7 @@
 
 A live game-night site for a remote team on Google Meet:
 
-1. **Sign in** with a work email (`@lamatic.ai` only), pick a name and an avatar. Names appear live in the lobby.
+1. **Sign in** with any email or Google account, pick a name and an avatar. Names appear live in the lobby.
 2. **Game 1: drawing game.** The host pastes an invite link (skribbl.io, Gartic Phone…) and everyone gets a Join button. The host adds +3/+2/+1 for the top three.
 3. **Game 2: Guess the next line.** Random, balanced teams (15 players → 3 teams of 5). The host plays a clip that stops right before a line. Everyone has a buzzer on their own device. The fastest buzz (server-timed) gets **5 seconds** to sing the next line. Wrong? The turn passes to the next fastest team. Correct: the singer gets **+2**, every teammate **+1**, and the team **+100**. The last round is worth **double**.
 4. **Live leaderboard** after every round, Menti-style: rows slide into their new places and scores count up.
@@ -25,14 +25,14 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, sign in with any `@lamatic.ai` address and tick **Sign in as the host**. In the host console → Players, click **Add 14 test players**. Then open the Stage and run a round. Test players buzz on their own. Each extra browser tab you sign into is another player.
+Open http://localhost:3000, sign in with any email address and tick **Sign in as the host**. In the host console → Players, click **Add 14 test players**. Then open the Stage and run a round. Test players buzz on their own. Each extra browser tab you sign into is another player.
 
 ## Go live with Supabase
 
 1. **Create a Supabase project** (a new one, just for game night).
 2. **Database:** Supabase → SQL Editor → paste all of [`supabase/schema.sql`](supabase/schema.sql) → Run. Then make yourself the host:
    ```sql
-   insert into public.hosts (email) values ('your.name@lamatic.ai');
+   insert into public.hosts (email) values ('you@example.com');
    ```
 3. **Sign-in methods** (Supabase → Authentication → Sign In / Providers):
    - **Google (recommended).** Lamatic uses Google Workspace, so this is one click for everyone. Create an OAuth client in Google Cloud Console (type "Web application"), add `https://<your-project>.supabase.co/auth/v1/callback` as an authorized redirect URI, then paste the client ID and secret into Supabase's Google provider.
@@ -43,13 +43,11 @@ Open http://localhost:3000, sign in with any `@lamatic.ai` address and tick **Si
 
 ### What the database enforces
 
-- Only `@lamatic.ai` emails can create an account (a trigger on `auth.users`), whatever sign-in method is used.
+- Anyone with the link can sign in. Only signed-in people can see names, buzzes and scores, and the host can remove anyone from Host → Players.
 - Only hosts can change the game, read the songs table (it holds the correct lines) or reset the wheel.
 - Buzz times come from the database clock (`clock_timestamp()`), and players can only send which round they buzzed. They can't fake an earlier buzz. Each player can buzz once per round, and only while buzzers are open.
 - Only the crowned winner can spin, only once, and the slice is picked by the database.
 - Every finished round is logged in `round_results`.
-
-To use a different email domain, change it in `allowed_email_domain()` in the SQL **and** in `NEXT_PUBLIC_ALLOWED_EMAIL_DOMAIN`.
 
 ## Songs
 
@@ -65,7 +63,7 @@ After a round, **▶ Play the real line** plays the next 8 seconds so everyone h
 
 1. Push this folder to GitHub (it can be its own repo or a folder in a bigger one).
 2. Vercel → Add New → Project → import the repo. If the app lives in a subfolder, set **Root Directory** to `game-night`.
-3. Add the environment variables from `.env.example` under Settings → Environment Variables.
+3. Add the two environment variables from `.env.example` under Settings → Environment Variables.
 4. Deploy, then add the Vercel URL to Supabase's redirect URLs (step 4 above).
 
 ## Running game night

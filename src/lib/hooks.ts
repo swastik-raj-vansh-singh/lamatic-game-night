@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBackend } from './backend';
-import { isAllowedEmail } from './config';
+import { isValidEmail } from './config';
 import { isEmptyState, normalizeState } from './game';
 import type { AuthUser, Buzz, GameState, Player, WheelSpin } from './types';
 
@@ -133,12 +133,6 @@ export function useGate(opts: { needPlayer?: boolean; needHost?: boolean } = {})
       router.replace('/login');
       return;
     }
-    if (!isAllowedEmail(user.email)) {
-      void getBackend()
-        .signOut()
-        .then(() => router.replace('/login?error=domain'));
-      return;
-    }
     if (opts.needHost && host === false) {
       router.replace('/play');
       return;
@@ -151,7 +145,7 @@ export function useGate(opts: { needPlayer?: boolean; needHost?: boolean } = {})
   const ready =
     !loading &&
     !!user &&
-    isAllowedEmail(user.email) &&
+    isValidEmail(user.email) &&
     loaded &&
     host !== null &&
     (!opts.needHost || host) &&

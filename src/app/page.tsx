@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Bulbs, DemoBanner } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
-import { EMAIL_DOMAIN, EVENT_DATE_LABEL } from '@/lib/config';
+import { EVENT_DATE_LABEL } from '@/lib/config';
 import { useAuth } from '@/lib/hooks';
 
 const NOTES = ['♪', '♫', '♬', '♩', '♪', '♫', '♬', '♪'];
@@ -62,7 +62,7 @@ export default function Landing() {
             {user ? 'Enter game night' : "I'm in"}
           </Link>
           <p className="muted" style={{ fontSize: '0.9rem' }}>
-            Sign in with your @{EMAIL_DOMAIN} email
+            Sign in with your email or Google account
           </p>
           {count !== null && (
             <p className="live-pill" aria-live="polite">
