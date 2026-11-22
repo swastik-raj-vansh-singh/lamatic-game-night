@@ -209,7 +209,7 @@ export default function StagePage() {
                 type="button"
                 className="big"
                 onClick={() => apply(s => assignTeams(s, contestants, s.teamCount || suggestTeamCount(contestants.length)))}
-                disabled={contestants.length < 2}
+                disabled={contestants.length < 1}
               >
                 Shuffle teams →
               </button>

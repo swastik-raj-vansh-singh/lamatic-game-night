@@ -252,7 +252,7 @@ export default function HostPage() {
                 Put me (the host) on a team too
               </label>
               <div className="row">
-                <button type="button" onClick={() => apply(s => assignTeams(s, contestants, s.teamCount))} disabled={contestants.length < 2}>
+                <button type="button" onClick={() => apply(s => assignTeams(s, contestants, s.teamCount))} disabled={contestants.length < 1}>
                   Shuffle teams and show them
                 </button>
               </div>
@@ -390,9 +390,21 @@ export default function HostPage() {
           <section className="card">
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h3>Guess the next line: {songs.length} rounds</h3>
-              <button type="button" onClick={saveSongs}>
-                Save songs
-              </button>
+              <div className="row">
+                <ConfirmButton
+                  label="Use the trial songs"
+                  confirmLabel="Click again: replace all 10 rounds"
+                  onConfirm={async () => {
+                    const trial = placeholderSongs();
+                    setSongs(trial);
+                    const { error } = await backend.saveSongs(trial);
+                    toast.show(error ?? 'Trial songs loaded and saved');
+                  }}
+                />
+                <button type="button" onClick={saveSongs}>
+                  Save songs
+                </button>
+              </div>
             </div>
             <p className="hint">
               For each round: an audio file URL (for example <code>/songs/round1.mp3</code> in the project&apos;s <code>public/songs</code> folder) or a YouTube link, the second the clip

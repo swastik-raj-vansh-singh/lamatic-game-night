@@ -161,12 +161,19 @@ drop policy if exists "host manages songs" on public.songs;
 create policy "host manages songs" on public.songs
   for all to authenticated using (public.is_host()) with check (public.is_host());
 
--- Ten placeholder rounds. Replace them in the host console (Songs tab) or here.
-insert into public.songs (round, title, artist, source, start_sec, stop_sec, answer_line)
-select g, 'Song ' || g || ' title', 'Artist name', '/songs/demo-tune.wav',
-       ((g - 1) % 3) * 2, ((g - 1) % 3) * 2 + 6,
-       'Correct next line for round ' || g || ' goes here'
-from generate_series(1, 10) as g
+-- Ten practice rounds: traditional songs with clips in public/songs/trial-*.mp3.
+-- Replace them with your real songs in the host console (Songs tab).
+insert into public.songs (round, title, artist, source, start_sec, stop_sec, answer_line) values
+  (1, 'Twinkle, Twinkle, Little Star', 'Traditional', '/songs/trial-01.mp3', 0, 5.27, 'How I wonder what you are'),
+  (2, 'Jingle Bells', 'Traditional', '/songs/trial-02.mp3', 0, 3.9, 'Jingle all the way'),
+  (3, 'Mary Had a Little Lamb', 'Traditional', '/songs/trial-03.mp3', 0, 4.83, 'Little lamb, little lamb'),
+  (4, 'Old MacDonald Had a Farm', 'Traditional', '/songs/trial-04.mp3', 0, 4.47, 'E-I-E-I-O'),
+  (5, 'Row, Row, Row Your Boat', 'Traditional', '/songs/trial-05.mp3', 0, 2.65, 'Gently down the stream'),
+  (6, 'London Bridge Is Falling Down', 'Traditional', '/songs/trial-06.mp3', 0, 4.83, 'Falling down, falling down'),
+  (7, 'Are You Sleeping (Frère Jacques)', 'Traditional', '/songs/trial-07.mp3', 0, 4.83, 'Brother John, Brother John'),
+  (8, 'Yankee Doodle', 'Traditional', '/songs/trial-08.mp3', 0, 2.22, 'A-riding on a pony'),
+  (9, 'Hot Cross Buns', 'Traditional', '/songs/trial-09.mp3', 0, 4.83, 'One a penny, two a penny'),
+  (10, 'Auld Lang Syne', 'Traditional', '/songs/trial-10.mp3', 0, 5.8, 'And never brought to mind')
 on conflict (round) do nothing;
 
 -- ---------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import type { Attempt, Buzz, GameState, Player, RoundState, Song, TeamId } from './types';
 import { TEAM_IDS } from './types';
+import { TRIAL_SONGS } from './trialSongs';
 
 export const TOTAL_ROUNDS = 10;
 export const ANSWER_MS = 5000;
@@ -287,13 +288,5 @@ export function resetGame(s: GameState): GameState {
 /* ------------------------------------------------------------------ */
 
 export function placeholderSongs(): Song[] {
-  return Array.from({ length: TOTAL_ROUNDS }, (_, i) => ({
-    round: i + 1,
-    title: `Song ${i + 1} title`,
-    artist: 'Artist name',
-    source: '/songs/demo-tune.wav',
-    start: (i % 3) * 2,
-    stop: (i % 3) * 2 + 6,
-    line: `Correct next line for round ${i + 1} goes here`,
-  }));
+  return TRIAL_SONGS.map(s => ({ ...s }));
 }
