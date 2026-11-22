@@ -18,6 +18,7 @@ import {
   initialState,
   judge,
   openBuzzers,
+  playersOnly,
   rankPlayers,
   revealAnswer,
   roundFinished,
@@ -27,7 +28,7 @@ import {
   setPhase,
   songReady,
 } from '@/lib/game';
-import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useWheel } from '@/lib/hooks';
+import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost, useWheel } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
 import type { GameState, Player, Song } from '@/lib/types';
 
@@ -133,7 +134,7 @@ export default function StagePage() {
   const player = useRef<SongPlayerHandle>(null);
   const backend = getBackend();
 
-  const contestants = useMemo(() => players.filter(p => p.id !== user?.id), [players, user]);
+  const contestants = useMemo(() => playersOnly(players, game, user?.id), [players, game, user]);
   const ranked = useMemo(() => rankPlayers(contestants, game?.points ?? {}), [contestants, game?.points]);
   const song = songs.find(s => s.round === (game?.round.index ?? 0) + 1) ?? null;
 
@@ -152,6 +153,7 @@ export default function StagePage() {
   }, [ready, empty, backend]);
 
   useBuzzEngine(game, buzzes, apply);
+  useRegisterHost(game, user?.id, apply);
 
   // Someone buzzed: stop the music.
   const answeringSeq = game?.round.status === 'answering' ? game.round.attempts.length : 0;

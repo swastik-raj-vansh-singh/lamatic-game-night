@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBackend } from './backend';
 import { isValidEmail } from './config';
-import { isEmptyState, nextCandidate, normalizeState, startNextAttempt } from './game';
+import { isEmptyState, nextCandidate, normalizeState, registerHost, startNextAttempt } from './game';
 import type { AuthUser, Buzz, GameState, Player, WheelSpin } from './types';
 
 /**
@@ -223,6 +223,16 @@ export function useBuzzEngine(game: GameState | null, buzzes: Buzz[], apply: Ret
     }, 350);
     return () => clearTimeout(t);
   }, [game, buzzes, apply]);
+}
+
+/** Marks this account as a host in the game, so player screens hide it. */
+export function useRegisterHost(game: GameState | null, userId: string | null | undefined, apply: ReturnType<typeof useHostActions>['apply']) {
+  const known = !!game && !!userId && game.hostIds.includes(userId);
+  useEffect(() => {
+    if (!game || !userId || known) return;
+    void apply(s => registerHost(s, userId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [known, userId, !!game]);
 }
 
 /** Milliseconds left on a local countdown that restarts whenever `runKey` changes. */

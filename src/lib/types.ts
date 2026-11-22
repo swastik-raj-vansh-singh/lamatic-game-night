@@ -51,6 +51,8 @@ export type GameState = {
   round: RoundState;
   totalRounds: number;
   winnerId: string | null;
+  /** Accounts that opened the Stage or Answer sheet. They run the game and are hidden from player lists. */
+  hostIds: string[];
   version: number;
 };
 

@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { PrizeReveal } from '@/components/PrizeReveal';
 import { Wheel } from '@/components/Wheel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
+import Link from 'next/link';
 import { Loading, TopBar } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
-import { currentAttempt, sortBuzzes } from '@/lib/game';
+import { currentAttempt, playersOnly, sortBuzzes } from '@/lib/game';
 import { useBuzzes, useGameState, useGate, useWheel } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
 import type { Buzz, GameState, Player } from '@/lib/types';
@@ -181,37 +182,46 @@ export default function PlayPage() {
   }, [game]);
 
   if (!ready || !game) return <Loading />;
-  if (!me) {
+  if (host || !me) {
     return (
       <>
         <TopBar host={host} />
         <main className="shell narrow">
           <div className="card">
-            <h2>You&apos;re signed in as the host</h2>
-            <p className="muted">Open the Stage to run the game. Hosts don&apos;t play, so there&apos;s nothing to do on this page.</p>
+            <h2>You&apos;re the host</h2>
+            <p className="muted">Hosts run the game and don&apos;t play, so you won&apos;t appear on anyone&apos;s screen. Share the Stage on Meet and keep the Answer sheet on your phone.</p>
+            <div className="row">
+              <Link className="btn" href="/stage">
+                Open the Stage
+              </Link>
+              <Link className="btn ghost" href="/host">
+                Open the Answer sheet
+              </Link>
+            </div>
           </div>
         </main>
       </>
     );
   }
+  const visible = playersOnly(players, game);
 
   return (
     <>
       <TopBar me={me} points={game.points[me.id] ?? 0} host={host} />
       <main className="shell">
-        {game.phase === 'lobby' && <LobbyView players={players} meId={me.id} />}
-        {game.phase === 'game1' && <Game1View game={game} players={players} />}
+        {game.phase === 'lobby' && <LobbyView players={visible} meId={me.id} />}
+        {game.phase === 'game1' && <Game1View game={game} players={visible} />}
         {game.phase === 'round' && (
           <>
             <RoundHeader game={game} />
             <RoundStatusBoard game={game} players={players} meId={me.id} />
             <BuzzerPad game={game} me={me} buzzes={buzzes} />
             <BuzzList game={game} players={players} buzzes={buzzes} limit={6} />
-            <LiveBoard game={game} players={players} meId={me.id} />
+            <LiveBoard game={game} players={visible} meId={me.id} />
           </>
         )}
-        {game.phase === 'leaderboard' && <FinalResults game={game} players={players} meId={me.id} />}
-        {game.phase === 'wheel' && <WheelPhase game={game} me={me} players={players} />}
+        {game.phase === 'leaderboard' && <FinalResults game={game} players={visible} meId={me.id} />}
+        {game.phase === 'wheel' && <WheelPhase game={game} me={me} players={visible} />}
       </main>
     </>
   );

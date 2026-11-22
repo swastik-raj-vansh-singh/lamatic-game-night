@@ -17,6 +17,11 @@ export default function JoinPage() {
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
 
+  // Hosts don't play: send them straight to the Stage.
+  useEffect(() => {
+    if (ready && host) router.replace('/stage');
+  }, [ready, host, router]);
+
   useEffect(() => {
     if (touched) return;
     if (me) {
@@ -29,7 +34,7 @@ export default function JoinPage() {
     }
   }, [me, user, touched]);
 
-  if (!ready || !user) return <Loading />;
+  if (!ready || !user || host) return <Loading />;
 
   const trimmed = name.trim();
 

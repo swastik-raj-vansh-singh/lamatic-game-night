@@ -49,6 +49,7 @@ export function initialState(): GameState {
     round: freshRound(0, TOTAL_ROUNDS, '1-start'),
     totalRounds: TOTAL_ROUNDS,
     winnerId: null,
+    hostIds: [],
     version: 0,
   };
 }
@@ -73,6 +74,7 @@ export function normalizeState(raw: unknown): GameState {
     game1: { ...base.game1, ...(r.game1 ?? {}), podium: Array.isArray(r.game1?.podium) ? r.game1!.podium : [] },
     round,
     points: r.points ?? {},
+    hostIds: Array.isArray(r.hostIds) ? r.hostIds.filter(x => typeof x === 'string') : [],
     version: typeof r.version === 'number' ? r.version : 0,
   };
 }
@@ -198,6 +200,17 @@ export function roundFinished(r: RoundState): boolean {
   return r.status === 'won' || r.status === 'failed' || r.status === 'revealed';
 }
 
+/** Players everyone else sees: hosts run the game and don't play. */
+export function playersOnly(players: Player[], s: GameState | null, extraHostId?: string | null): Player[] {
+  const hosts = new Set(s?.hostIds ?? []);
+  if (extraHostId) hosts.add(extraHostId);
+  return players.filter(p => !hosts.has(p.id));
+}
+
+export function registerHost(s: GameState, id: string): GameState | null {
+  return s.hostIds.includes(id) ? null : { ...s, hostIds: [...s.hostIds, id] };
+}
+
 /* ------------------------------------------------------------------ */
 /* Points and winner                                                   */
 /* ------------------------------------------------------------------ */
@@ -227,7 +240,7 @@ export function crownWinner(s: GameState, playerId: string): GameState {
 
 export function resetGame(s: GameState): GameState {
   const fresh = initialState();
-  return { ...fresh, game1: { ...fresh.game1, name: s.game1.name || fresh.game1.name }, round: freshRound(0, fresh.totalRounds), version: s.version };
+  return { ...fresh, game1: { ...fresh.game1, name: s.game1.name || fresh.game1.name }, round: freshRound(0, fresh.totalRounds), hostIds: s.hostIds, version: s.version };
 }
 
 /* ------------------------------------------------------------------ */

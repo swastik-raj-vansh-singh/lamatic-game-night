@@ -16,6 +16,7 @@ import {
   initialState,
   judge,
   placeholderSongs,
+  playersOnly,
   rankPlayers,
   resetGame,
   resetRound,
@@ -23,7 +24,7 @@ import {
   roundFinished,
   songReady,
 } from '@/lib/game';
-import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions } from '@/lib/hooks';
+import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost } from '@/lib/hooks';
 import { FAMOUS_SONGS } from '@/lib/songLists';
 import type { Song } from '@/lib/types';
 
@@ -50,6 +51,7 @@ export default function HostPage() {
   const backend = getBackend();
 
   useBuzzEngine(game, buzzes, apply);
+  useRegisterHost(game, user?.id, apply);
 
   useEffect(() => {
     if (ready) void backend.fetchSongs().then(list => setSongs(list.length ? list : placeholderSongs()));
@@ -58,7 +60,7 @@ export default function HostPage() {
     if (ready && empty) void backend.writeState(initialState(), null);
   }, [ready, empty, backend]);
 
-  const contestants = useMemo(() => players.filter(p => p.id !== user?.id), [players, user]);
+  const contestants = useMemo(() => playersOnly(players, game, user?.id), [players, game, user]);
   const ranked = useMemo(() => rankPlayers(contestants, game?.points ?? {}), [contestants, game?.points]);
 
   if (!ready || !game) return <Loading label="Opening the answer sheet…" />;
