@@ -65,6 +65,7 @@ create table if not exists public.players (
   joined_at    timestamptz not null default now()
 );
 alter table public.players enable row level security;
+grant select, insert, update, delete on public.players to authenticated;
 
 drop policy if exists "members read players" on public.players;
 create policy "members read players" on public.players
@@ -101,6 +102,7 @@ create table if not exists public.game_state (
   updated_at timestamptz not null default now()
 );
 alter table public.game_state enable row level security;
+grant select, insert, update on public.game_state to authenticated;
 insert into public.game_state (id, state) values (1, '{}'::jsonb) on conflict (id) do nothing;
 
 drop policy if exists "members read state" on public.game_state;
@@ -170,6 +172,7 @@ create table if not exists public.songs (
   answer_line text not null default ''     -- the correct next line (host only)
 );
 alter table public.songs enable row level security;
+grant select, insert, update, delete on public.songs to authenticated;
 
 drop policy if exists "host manages songs" on public.songs;
 create policy "host manages songs" on public.songs
@@ -193,6 +196,8 @@ create table if not exists public.wheel_spins (
   spun_at  timestamptz not null default now()
 );
 alter table public.wheel_spins enable row level security;
+revoke insert, update, delete on public.wheel_spins from anon, authenticated;
+grant select on public.wheel_spins to authenticated;
 
 drop policy if exists "members read wheel" on public.wheel_spins;
 create policy "members read wheel" on public.wheel_spins
@@ -250,6 +255,7 @@ create table if not exists public.round_results (
   created_at  timestamptz not null default now()
 );
 alter table public.round_results enable row level security;
+grant select, insert, update on public.round_results to authenticated;
 
 drop policy if exists "members read results" on public.round_results;
 create policy "members read results" on public.round_results
