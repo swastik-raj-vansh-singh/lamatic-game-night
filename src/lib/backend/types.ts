@@ -33,7 +33,12 @@ export interface Backend {
 
   // Game state (host writes, everyone reads)
   fetchState(): Promise<unknown>;
-  writeState(s: GameState): Promise<Result>;
+  /**
+   * Saves the state only if the stored version still equals `expectedVersion`
+   * (null skips the check, for the very first write). `conflict` means another
+   * screen saved first: reload and try again.
+   */
+  writeState(s: GameState, expectedVersion: number | null): Promise<Result & { conflict?: boolean }>;
   subscribeState(cb: (raw: unknown) => void): Unsubscribe;
 
   // Buzzers

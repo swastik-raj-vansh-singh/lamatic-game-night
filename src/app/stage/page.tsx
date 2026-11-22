@@ -5,31 +5,118 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PrizeReveal, celebrate } from '@/components/PrizeReveal';
 import { SongPlayer, type SongPlayerHandle } from '@/components/SongPlayer';
 import { Wheel } from '@/components/Wheel';
-import { BuzzList, Game1View, LeaderboardView, LobbyView, RoundHeader, RoundStatusBoard, TeamsView } from '@/components/views';
-import { Bulbs, DemoBanner, Loading, SoundToggle } from '@/components/ui';
+import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
+import { Bulbs, ConfirmButton, DemoBanner, Loading, SoundToggle } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
 import { DEMO } from '@/lib/config';
 import {
-  assignTeams,
+  PHASE_LABEL,
+  PHASE_ORDER,
   closeRound,
   crownWinner,
   goToRound,
   initialState,
   judge,
-  nextCandidate,
   openBuzzers,
   rankPlayers,
-  rememberBoard,
   revealAnswer,
+  roundFinished,
   roundWinner,
+  setGame1Link,
+  setGame1Podium,
   setPhase,
-  showLeaderboard,
-  startNextAttempt,
-  suggestTeamCount,
+  songReady,
 } from '@/lib/game';
-import { useBuzzes, useGameState, useGate, useHostActions, useWheel } from '@/lib/hooks';
+import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useWheel } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
-import type { Song } from '@/lib/types';
+import type { GameState, Player, Song } from '@/lib/types';
+
+function Game1HostPanel({ game, contestants, apply }: { game: GameState; contestants: Player[]; apply: ReturnType<typeof useHostActions>['apply'] }) {
+  const [url, setUrl] = useState(game.game1.url);
+  const [podium, setPodium] = useState<string[]>(['', '', '']);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => setUrl(game.game1.url), [game.game1.url]);
+  useEffect(() => setPodium([0, 1, 2].map(i => game.game1.podium[i] ?? '')), [game.game1.podium]);
+
+  return (
+    <section className="card" style={{ borderColor: 'var(--teal)' }}>
+      <p className="eyebrow">Host · skribbl setup</p>
+      <div className="host-grid">
+        <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+          <h3>1. Share the room</h3>
+          <p className="hint">
+            Open{' '}
+            <a href="https://skribbl.io" target="_blank" rel="noopener noreferrer">
+              skribbl.io
+            </a>
+            , type your name, click <b>Create Private Room</b>, then copy the invite link and paste it here.
+          </p>
+          <div className="row">
+            <input aria-label="skribbl invite link" className="grow" placeholder="https://skribbl.io/?…" value={url} onChange={e => setUrl(e.target.value)} />
+            <button
+              type="button"
+              onClick={async () => {
+                const u = url.trim();
+                if (u && !/^https?:\/\//i.test(u)) {
+                  setNote('Paste the full link, starting with https://');
+                  return;
+                }
+                await apply(s => setGame1Link(s, 'skribbl.io', u));
+                setNote(u ? 'Everyone now sees the Join button.' : 'Link removed.');
+              }}
+            >
+              Show to everyone
+            </button>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+          <h3>2. When skribbl ends, who won?</h3>
+          <div className="row">
+            {['1st · +3', '2nd · +2', '3rd · +1'].map((label, i) => (
+              <div key={label} className="field grow" style={{ minWidth: 140 }}>
+                <label htmlFor={`podium-${i}`}>{label}</label>
+                <select
+                  id={`podium-${i}`}
+                  value={podium[i]}
+                  onChange={e => {
+                    const next = [...podium];
+                    next[i] = e.target.value;
+                    setPodium(next);
+                  }}
+                >
+                  <option value="">Pick a player</option>
+                  {contestants.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="row">
+            <button
+              type="button"
+              disabled={!podium.some(Boolean)}
+              onClick={async () => {
+                const clean = podium.filter((p, i) => p && podium.indexOf(p) === i);
+                if (clean.length !== podium.filter(Boolean).length) {
+                  setNote('Pick three different players.');
+                  return;
+                }
+                await apply(s => setGame1Podium(s, podium));
+                setNote('Points given. Saving again replaces them, so fixing a mistake is safe.');
+              }}
+            >
+              Give the points
+            </button>
+          </div>
+        </div>
+      </div>
+      {note && <p className="ok">{note}</p>}
+    </section>
+  );
+}
 
 export default function StagePage() {
   const { user, players, ready } = useGate({ needHost: true });
@@ -39,12 +126,16 @@ export default function StagePage() {
   const { spin, fresh } = useWheel();
   const [songs, setSongs] = useState<Song[]>([]);
   const [showPrize, setShowPrize] = useState(false);
+  const [localSpin, setLocalSpin] = useState<number | null>(null);
+  const [spinError, setSpinError] = useState<string | null>(null);
+  const [winnerPick, setWinnerPick] = useState('');
   const [origin, setOrigin] = useState('');
   const player = useRef<SongPlayerHandle>(null);
+  const backend = getBackend();
 
   const contestants = useMemo(() => players.filter(p => p.id !== user?.id), [players, user]);
+  const ranked = useMemo(() => rankPlayers(contestants, game?.points ?? {}), [contestants, game?.points]);
   const song = songs.find(s => s.round === (game?.round.index ?? 0) + 1) ?? null;
-  const backend = getBackend();
 
   useEffect(() => setOrigin(window.location.host), []);
 
@@ -52,28 +143,15 @@ export default function StagePage() {
     if (!ready) return;
     const load = () => backend.fetchSongs().then(setSongs);
     void load();
-    const onFocus = () => void load();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
   }, [ready, backend]);
 
-  // First run: create the game state row.
   useEffect(() => {
-    if (ready && empty) void backend.writeState(initialState());
+    if (ready && empty) void backend.writeState(initialState(), null);
   }, [ready, empty, backend]);
 
-  // Buzzer engine: first buzz (by server time) gets the turn. A short grace
-  // period lets near-simultaneous buzzes land before we pick.
-  useEffect(() => {
-    if (!game || game.phase !== 'round' || game.round.status !== 'open') return;
-    if (!nextCandidate(game, buzzes)) return;
-    const key = game.round.key;
-    const t = setTimeout(async () => {
-      const latest = await backend.fetchBuzzes(key);
-      await apply(s => (s.round.key === key ? startNextAttempt(s, latest) : null));
-    }, 350);
-    return () => clearTimeout(t);
-  }, [game, buzzes, apply, backend]);
+  useBuzzEngine(game, buzzes, apply);
 
   // Someone buzzed: stop the music.
   const answeringSeq = game?.round.status === 'answering' ? game.round.attempts.length : 0;
@@ -84,7 +162,7 @@ export default function StagePage() {
     }
   }, [answeringSeq]);
 
-  // Keep a record of every finished round.
+  // Keep a record of every finished song.
   const roundDone = game && (game.round.status === 'won' || game.round.status === 'failed') ? `${game.round.key}:${game.round.status}` : null;
   useEffect(() => {
     if (!roundDone || !game) return;
@@ -94,21 +172,23 @@ export default function StagePage() {
       round: game.round.index + 1,
       roundKey: game.round.key,
       outcome: game.round.status === 'won' ? 'won' : 'failed',
-      team: w?.team ?? null,
+      team: null,
       answeredBy: w?.playerId ?? null,
-      points: game.round.awarded?.points ?? {},
+      points: game.round.awarded ? { [game.round.awarded.playerId]: game.round.awarded.pts } : {},
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundDone]);
 
+  useEffect(() => {
+    if (!spin) setLocalSpin(null);
+  }, [spin]);
+
   // Demo mode: test players buzz on their own so you can try the flow alone.
   const botWindow = game?.phase === 'round' && (game.round.status === 'open' || game.round.status === 'answering') ? game.round.key : null;
   useEffect(() => {
-    if (!DEMO || !botWindow || !backend.botBuzz || !game) return;
-    const bots = players.filter(p => p.isBot && game.teams[p.id]);
-    const timers = bots.map(p =>
-      Math.random() < 0.6 ? setTimeout(() => void backend.botBuzz?.(botWindow, p.id, 0), 1200 + Math.random() * 4000) : null,
-    );
+    if (!DEMO || !botWindow || !backend.botBuzz) return;
+    const bots = players.filter(p => p.isBot);
+    const timers = bots.map(p => (Math.random() < 0.5 ? setTimeout(() => void backend.botBuzz?.(botWindow, p.id, 0), 1200 + Math.random() * 4000) : null));
     return () => timers.forEach(t => t && clearTimeout(t));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botWindow]);
@@ -118,7 +198,18 @@ export default function StagePage() {
   const r = game.round;
   const isLast = r.index >= game.totalRounds - 1;
   const winner = players.find(p => p.id === game.winnerId);
-  const top = rankPlayers(contestants, game.points)[0];
+  const chosenWinner = winnerPick || ranked[0]?.player.id || '';
+  const segment = spin?.segment ?? localSpin;
+  const seed = segment === null ? null : `${segment}-${game.winnerId}`;
+
+  const goPhase = (phase: GameState['phase']) =>
+    apply(s => {
+      if (phase === 'wheel') {
+        const w = s.winnerId ?? ranked[0]?.player.id;
+        return w ? crownWinner(s, w) : setPhase(s, 'wheel');
+      }
+      return setPhase(s, phase);
+    });
 
   const play = async () => {
     sfx.unlock();
@@ -139,7 +230,7 @@ export default function StagePage() {
               <span className="chip">Stage · share this tab on Meet</span>
               <SoundToggle />
               <Link className="btn ghost small" href="/host" target="_blank">
-                Host console
+                Answer sheet
               </Link>
             </div>
           </div>
@@ -147,6 +238,14 @@ export default function StagePage() {
       </div>
 
       <main className="stage-main">
+        <nav className="phase-steps" aria-label="Game steps">
+          {PHASE_ORDER.map((p, i) => (
+            <button key={p} type="button" className="ghost small" aria-current={game.phase === p ? 'step' : undefined} onClick={() => goPhase(p)}>
+              {i + 1}. {PHASE_LABEL[p]}
+            </button>
+          ))}
+        </nav>
+
         {game.phase === 'lobby' && (
           <>
             <div className="marquee" style={{ width: '100%' }}>
@@ -154,41 +253,108 @@ export default function StagePage() {
               <p className="eyebrow">Join now</p>
               <h1 style={{ fontSize: 'clamp(2.6rem, 8vw, 5.4rem)' }}>Game Night</h1>
               <p className="join-url">{origin}</p>
-              <p className="muted">Sign in with your work email, pick a name, and you&apos;ll pop up below.</p>
+              <p className="muted">Sign in, pick a name, and you&apos;ll pop up below.</p>
               <Bulbs count={24} />
             </div>
             <LobbyView players={contestants} big />
           </>
         )}
-        {game.phase === 'game1' && <Game1View game={game} />}
-        {game.phase === 'teams' && <TeamsView game={game} players={contestants} />}
+
+        {game.phase === 'game1' && (
+          <>
+            <Game1View game={game} players={contestants} />
+            <Game1HostPanel game={game} contestants={contestants} apply={apply} />
+          </>
+        )}
+
         {game.phase === 'round' && (
           <div className="stage-round">
             <div style={{ display: 'grid', gap: 16 }}>
               <RoundHeader game={game} />
               <RoundStatusBoard game={game} players={players} />
+              {!songReady(song) && r.status === 'ready' && (
+                <p className="error">This song isn&apos;t ready yet. Open the Answer sheet → Songs to add the link and stop time.</p>
+              )}
             </div>
             <div style={{ display: 'grid', gap: 16 }}>
               <SongPlayer ref={player} song={song} />
-              <BuzzList game={game} players={players} buzzes={buzzes} limit={10} />
+              <BuzzList game={game} players={players} buzzes={buzzes} limit={8} />
+              <LiveBoard game={game} players={contestants} limit={6} />
             </div>
           </div>
         )}
-        {game.phase === 'leaderboard' && <LeaderboardView game={game} players={contestants} big />}
+
+        {game.phase === 'leaderboard' && (
+          <>
+            <FinalResults game={game} players={contestants} big />
+            <section className="card" style={{ borderColor: 'var(--bulb)' }}>
+              <h3>Host · crown the winner</h3>
+              <div className="row">
+                <select aria-label="Winner" value={chosenWinner} onChange={e => setWinnerPick(e.target.value)} style={{ width: 'auto', minWidth: 220 }}>
+                  {ranked.map(x => (
+                    <option key={x.player.id} value={x.player.id}>
+                      #{x.rank} {x.player.displayName} · {x.points} pts
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="big" disabled={!chosenWinner} onClick={() => apply(s => crownWinner(s, chosenWinner))}>
+                  Open the prize wheel →
+                </button>
+              </div>
+              <p className="hint">The top scorer is picked for you. Choose someone else only to break a tie.</p>
+            </section>
+          </>
+        )}
+
         {game.phase === 'wheel' && (
           <section className="card" style={{ justifyItems: 'center', textAlign: 'center', gap: 18 }}>
             <p className="eyebrow">The finale</p>
-            <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.4rem)' }}>{winner ? `${winner.avatar} ${winner.displayName}` : 'Our champion'}</h2>
-            <p className="muted">{spin ? 'The wheel has spoken.' : 'Champion, spin the wheel on your screen!'}</p>
-            <Wheel segment={spin?.segment ?? null} seed={spin?.spunAt ?? null} animate={fresh} onDone={() => setShowPrize(true)} />
-            {spin && !fresh && (
-              <button type="button" className="ghost" onClick={() => setShowPrize(true)}>
-                Show the prize
+            <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.4rem)' }}>{winner ? `${winner.avatar} ${winner.displayName}` : 'Pick a winner first'}</h2>
+            <p className="muted">{segment !== null ? 'The wheel has spoken.' : 'Three mystery gifts, two heartbreaks, one spin.'}</p>
+            <Wheel segment={segment} seed={seed} animate={fresh || localSpin !== null} onDone={() => setShowPrize(true)} />
+            {segment === null ? (
+              <button
+                type="button"
+                className="big"
+                disabled={!winner}
+                onClick={async () => {
+                  sfx.unlock();
+                  setSpinError(null);
+                  const res = await backend.spin();
+                  if (res.error) setSpinError(res.error);
+                  else if (typeof res.segment === 'number') setLocalSpin(res.segment);
+                }}
+              >
+                Spin for {winner?.displayName ?? 'the winner'}
               </button>
+            ) : (
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <button type="button" className="ghost" onClick={() => setShowPrize(true)}>
+                  Show the prize
+                </button>
+                <ConfirmButton
+                  label="Reset the wheel"
+                  confirmLabel="Click again to reset"
+                  onConfirm={async () => {
+                    const { error } = await backend.resetWheel();
+                    if (error) setSpinError(error);
+                    setLocalSpin(null);
+                  }}
+                />
+              </div>
             )}
-            {showPrize && spin && <PrizeReveal segment={spin.segment} winnerName={winner?.displayName ?? 'Our champion'} isWinner={false} onClose={() => setShowPrize(false)} />}
+            <p className="hint">The winner can also spin from their own phone.</p>
+            {spinError && (
+              <p className="error" role="alert">
+                {spinError}
+              </p>
+            )}
+            {showPrize && segment !== null && (
+              <PrizeReveal segment={segment} winnerName={winner?.displayName ?? 'Our champion'} isWinner={false} onClose={() => setShowPrize(false)} />
+            )}
           </section>
         )}
+
         {error && (
           <p className="error" role="alert">
             {error}
@@ -201,34 +367,19 @@ export default function StagePage() {
           <div className="group">
             {game.phase === 'lobby' && (
               <button type="button" className="big" onClick={() => apply(s => setPhase(s, 'game1'))}>
-                Start Game 1 →
+                Start skribbl →
               </button>
             )}
             {game.phase === 'game1' && (
-              <button
-                type="button"
-                className="big"
-                onClick={() => apply(s => assignTeams(s, contestants, s.teamCount || suggestTeamCount(contestants.length)))}
-                disabled={contestants.length < 1}
-              >
-                Shuffle teams →
+              <button type="button" className="big" onClick={() => apply(s => setPhase(s, 'round'))}>
+                Start Guess the line →
               </button>
-            )}
-            {game.phase === 'teams' && (
-              <>
-                <button type="button" className="ghost" onClick={() => apply(s => assignTeams(s, contestants, s.teamCount))}>
-                  Shuffle again
-                </button>
-                <button type="button" className="big" onClick={() => apply(s => goToRound(rememberBoard(s), 0))}>
-                  Start Round 1 →
-                </button>
-              </>
             )}
             {game.phase === 'round' && (
               <>
                 {r.status === 'ready' && (
                   <button type="button" className="big" onClick={play}>
-                    ▶ Play clip
+                    ▶ Play song
                   </button>
                 )}
                 {(r.status === 'open' || r.status === 'answering') && (
@@ -243,7 +394,7 @@ export default function StagePage() {
                       ■ Stop
                     </button>
                     <button type="button" className="ghost" onClick={() => player.current?.restart()}>
-                      ↺ Restart clip
+                      ↺ Restart
                     </button>
                   </>
                 )}
@@ -282,28 +433,24 @@ export default function StagePage() {
                   </button>
                 )}
                 {r.status === 'revealed' && (
-                  <>
-                    <button type="button" className="ghost" onClick={() => player.current?.playAnswer()}>
-                      ▶ Play the real line
-                    </button>
-                    <button type="button" className="big" onClick={() => apply(showLeaderboard)}>
-                      {isLast ? 'Final leaderboard →' : 'Leaderboard →'}
-                    </button>
-                  </>
+                  <button type="button" className="ghost" onClick={() => player.current?.playAnswer()}>
+                    ▶ Play the real line
+                  </button>
                 )}
+                {roundFinished(r) &&
+                  (isLast ? (
+                    <button type="button" className="big" onClick={() => apply(s => setPhase(s, 'leaderboard'))}>
+                      Final results →
+                    </button>
+                  ) : (
+                    <button type="button" className={r.status === 'revealed' ? 'big' : 'ghost'} onClick={() => apply(s => goToRound(s, s.round.index + 1))}>
+                      Next song →
+                    </button>
+                  ))}
               </>
             )}
-            {game.phase === 'leaderboard' &&
-              (isLast && (r.status === 'revealed' || r.status === 'won' || r.status === 'failed') ? (
-                <button type="button" className="big" disabled={!top} onClick={() => top && apply(s => crownWinner(rememberBoard(s), top.player.id))}>
-                  Crown {top ? top.player.displayName : 'the winner'} →
-                </button>
-              ) : (
-                <button type="button" className="big" onClick={() => apply(s => goToRound(rememberBoard(s), s.round.status === 'ready' ? s.round.index : s.round.index + 1))}>
-                  {r.status === 'ready' ? `Back to Round ${r.index + 1} →` : `Round ${r.index + 2} →`}
-                </button>
-              ))}
-            {game.phase === 'wheel' && <span className="chip">{spin ? 'Spun' : `Waiting for ${winner?.displayName ?? 'the winner'} to spin`}</span>}
+            {game.phase === 'leaderboard' && <span className="chip">Pick the winner above, then open the wheel</span>}
+            {game.phase === 'wheel' && <span className="chip">{segment !== null ? 'Spun! Send the voucher privately.' : `Waiting for ${winner?.displayName ?? 'the winner'} to spin`}</span>}
           </div>
           <div className="group">
             {game.phase === 'round' && (
@@ -311,7 +458,9 @@ export default function StagePage() {
                 {buzzes.length} buzz{buzzes.length === 1 ? '' : 'es'}
               </span>
             )}
-            <span className="chip num">{contestants.length} players</span>
+            <span className="chip num">
+              {contestants.length} player{contestants.length === 1 ? '' : 's'}
+            </span>
           </div>
         </div>
       </nav>

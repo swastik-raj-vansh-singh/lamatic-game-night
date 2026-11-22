@@ -177,7 +177,7 @@ insert into public.songs (round, title, artist, source, start_sec, stop_sec, ans
 on conflict (round) do nothing;
 
 -- ---------------------------------------------------------------------
--- 6. Prize wheel: the server picks the slice, and only the winner can spin
+-- 6. Prize wheel: the server picks the slice; the winner (or the host) spins once
 -- ---------------------------------------------------------------------
 create table if not exists public.wheel_spins (
   id       int primary key default 1 check (id = 1),
@@ -204,8 +204,11 @@ begin
   if v_state ->> 'phase' is distinct from 'wheel' then
     raise exception 'The wheel is not open yet';
   end if;
-  if v_state ->> 'winnerId' is distinct from auth.uid()::text then
-    raise exception 'Only the winner can spin the wheel';
+  if v_state ->> 'winnerId' is null then
+    raise exception 'Pick a winner first';
+  end if;
+  if v_state ->> 'winnerId' is distinct from auth.uid()::text and not public.is_host() then
+    raise exception 'Only the winner or the host can spin the wheel';
   end if;
   v_segment := floor(random() * 5)::int;  -- 0 Gift 1, 1 miss, 2 Gift 2, 3 Gift 3, 4 miss
   insert into public.wheel_spins (id, segment, spun_by) values (1, v_segment, auth.uid())

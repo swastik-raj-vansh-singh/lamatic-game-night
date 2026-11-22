@@ -1,6 +1,3 @@
-export type TeamId = 'A' | 'B' | 'C' | 'D';
-export const TEAM_IDS: TeamId[] = ['A', 'B', 'C', 'D'];
-
 export type AuthUser = { id: string; email: string };
 
 export type Player = {
@@ -12,29 +9,29 @@ export type Player = {
   isBot?: boolean;
 };
 
-export type Phase = 'lobby' | 'game1' | 'teams' | 'round' | 'leaderboard' | 'wheel';
+/**
+ * lobby       – people join and pick a name
+ * game1       – skribbl: everyone gets the room link, host gives +3/+2/+1 after
+ * round       – Guess the line: song rounds with buzzers
+ * leaderboard – final results
+ * wheel       – the winner spins for a prize
+ */
+export type Phase = 'lobby' | 'game1' | 'round' | 'leaderboard' | 'wheel';
 
 /**
  * ready     – round set up, waiting for the host to press Play
  * open      – song is playing / buzzers are live, nobody is answering
- * answering – a team has its 5 seconds
- * won       – a team sang the right line
- * failed    – every team missed (or the host closed the round)
+ * answering – one player has their 5 seconds
+ * won       – someone sang the right line
+ * failed    – the host closed the round without a winner
  * revealed  – the host showed the correct line to everyone
  */
 export type RoundStatus = 'ready' | 'open' | 'answering' | 'won' | 'failed' | 'revealed';
 
 export type Attempt = {
   seq: number;
-  team: TeamId;
   playerId: string;
   result: 'pending' | 'correct' | 'wrong';
-};
-
-export type RoundAward = {
-  points: Record<string, number>;
-  team: TeamId;
-  teamPts: number;
 };
 
 export type RoundState = {
@@ -44,23 +41,13 @@ export type RoundState = {
   attempts: Attempt[];
   reveal: { title: string; artist: string; line: string } | null;
   double: boolean;
-  awarded: RoundAward | null;
-};
-
-export type Board = {
-  prevPoints: Record<string, number>;
-  prevTeamScores: Partial<Record<TeamId, number>>;
-  shownAt: number;
+  awarded: { playerId: string; pts: number } | null;
 };
 
 export type GameState = {
   phase: Phase;
-  game1: { name: string; url: string };
-  teamCount: number;
-  teams: Record<string, TeamId>;
-  teamScores: Partial<Record<TeamId, number>>;
+  game1: { name: string; url: string; podium: string[] };
   points: Record<string, number>;
-  board: Board;
   round: RoundState;
   totalRounds: number;
   winnerId: string | null;

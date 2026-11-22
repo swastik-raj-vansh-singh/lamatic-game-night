@@ -11,10 +11,10 @@ export type SongPlayerHandle = {
   playAnswer(): void;
 };
 
-type Status = 'idle' | 'playing' | 'paused' | 'ended' | 'error' | 'nosource';
+type Status = 'loading' | 'idle' | 'playing' | 'paused' | 'ended' | 'error' | 'nosource' | 'notimed';
 
 /* Minimal typing for the YouTube IFrame API we use. */
-type YTPlayer = {
+export type YTPlayer = {
   playVideo(): void;
   pauseVideo(): void;
   seekTo(s: number, allowSeekAhead: boolean): void;
@@ -38,7 +38,7 @@ export function youtubeId(src: string): string | null {
 }
 
 let ytLoader: Promise<YTNamespace> | null = null;
-function loadYouTube(): Promise<YTNamespace> {
+export function loadYouTube(): Promise<YTNamespace> {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (!ytLoader) {
     ytLoader = new Promise(resolve => {
@@ -55,116 +55,65 @@ function loadYouTube(): Promise<YTNamespace> {
   return ytLoader;
 }
 
-const fmt = (t: number) => `${Math.floor(Math.max(0, t) / 60)}:${String(Math.floor(Math.max(0, t) % 60)).padStart(2, '0')}`;
-
-/**
- * Plays a clip of a song from `start` and stops itself at `stop`, right before
- * the line players have to sing. Works with an audio file URL or a YouTube link.
- */
-export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null; onPlay?: () => void }>(function SongPlayer({ song, onPlay }, ref) {
+/** One audio source (file or YouTube) with play/pause/seek/time, used by the stage player and the timing tool. */
+export function useMediaSource(source: string, box: React.RefObject<HTMLDivElement | null>, startHint = 0) {
+  const src = source.trim();
+  const ytId = src ? youtubeId(src) : null;
   const audio = useRef<HTMLAudioElement | null>(null);
   const yt = useRef<YTPlayer | null>(null);
-  const ytBox = useRef<HTMLDivElement>(null);
-  const raf = useRef(0);
-  const endAt = useRef(0);
-  const startedAt = useRef(0);
-  const [status, setStatus] = useState<Status>('idle');
-  const statusRef = useRef<Status>('idle');
-  const [time, setTime] = useState(0);
-  const src = song?.source?.trim() ?? '';
-  const ytId = src ? youtubeId(src) : null;
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const pendingPlay = useRef(false);
 
-  const set = (s: Status) => {
-    statusRef.current = s;
-    setStatus(s);
-  };
-
-  const now = useCallback(() => (ytId ? yt.current?.getCurrentTime?.() ?? 0 : audio.current?.currentTime ?? 0), [ytId]);
-  const seek = useCallback(
-    (t: number) => {
-      if (ytId) yt.current?.seekTo?.(t, true);
-      else if (audio.current) audio.current.currentTime = t;
-    },
-    [ytId],
-  );
-  const rawPause = useCallback(() => {
-    cancelAnimationFrame(raf.current);
-    if (ytId) yt.current?.pauseVideo?.();
-    else audio.current?.pause();
-  }, [ytId]);
-  const rawPlay = useCallback(() => {
-    if (ytId) {
-      yt.current?.playVideo?.();
-      return;
-    }
-    audio.current?.play().catch(() => set('error'));
-  }, [ytId]);
-
-  const loop = useCallback(() => {
-    const t = now();
-    setTime(t);
-    const warm = performance.now() - startedAt.current > 350;
-    if (warm && endAt.current && t >= endAt.current - 0.03) {
-      rawPause();
-      set('ended');
-      return;
-    }
-    raf.current = requestAnimationFrame(loop);
-  }, [now, rawPause]);
-
-  // Audio file source
   useEffect(() => {
-    rawPause();
-    if (!src) {
-      set('nosource');
-      return;
+    setReady(false);
+    setFailed(false);
+    pendingPlay.current = false;
+    if (!src) return;
+    if (!ytId) {
+      const a = new Audio(src);
+      a.preload = 'auto';
+      audio.current = a;
+      const onReady = () => setReady(true);
+      const onErr = () => setFailed(true);
+      a.addEventListener('canplay', onReady);
+      a.addEventListener('loadedmetadata', onReady);
+      a.addEventListener('error', onErr);
+      return () => {
+        a.pause();
+        a.removeEventListener('canplay', onReady);
+        a.removeEventListener('loadedmetadata', onReady);
+        a.removeEventListener('error', onErr);
+        audio.current = null;
+      };
     }
-    if (ytId) return;
-    const a = new Audio(src);
-    a.preload = 'auto';
-    audio.current = a;
-    const onErr = () => set('error');
-    const onEnded = () => set('ended');
-    a.addEventListener('error', onErr);
-    a.addEventListener('ended', onEnded);
-    set('idle');
-    setTime(song?.start ?? 0);
-    return () => {
-      a.pause();
-      a.removeEventListener('error', onErr);
-      a.removeEventListener('ended', onEnded);
-      audio.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src, ytId, song?.round]);
-
-  // YouTube source
-  useEffect(() => {
-    if (!ytId) return;
     let cancelled = false;
     let player: YTPlayer | null = null;
-    set('idle');
     loadYouTube().then(YT => {
-      if (cancelled || !ytBox.current) return;
+      if (cancelled || !box.current) return;
       const el = document.createElement('div');
-      ytBox.current.innerHTML = '';
-      ytBox.current.appendChild(el);
+      box.current.innerHTML = '';
+      box.current.appendChild(el);
       player = new YT.Player(el, {
         width: 240,
         height: 135,
         videoId: ytId,
-        playerVars: { controls: 0, disablekb: 1, modestbranding: 1, rel: 0, playsinline: 1, start: Math.floor(song?.start ?? 0) },
+        playerVars: { controls: 0, disablekb: 1, modestbranding: 1, rel: 0, playsinline: 1, start: Math.floor(startHint) },
         events: {
           onReady: () => {
             yt.current = player;
+            setReady(true);
+            if (pendingPlay.current) {
+              pendingPlay.current = false;
+              player?.playVideo();
+            }
           },
-          onError: () => set('error'),
+          onError: () => setFailed(true),
         },
       });
     });
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf.current);
       try {
         player?.destroy();
       } catch {
@@ -172,49 +121,134 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null; onPl
       }
       yt.current = null;
     };
+    // startHint only matters when the player is first created
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ytId]);
+  }, [src, ytId, box]);
+
+  const api = {
+    isYouTube: !!ytId,
+    ready,
+    failed,
+    now: () => (ytId ? yt.current?.getCurrentTime?.() ?? 0 : audio.current?.currentTime ?? 0),
+    seek: (t: number) => {
+      if (ytId) yt.current?.seekTo?.(Math.max(0, t), true);
+      else if (audio.current) audio.current.currentTime = Math.max(0, t);
+    },
+    play: () => {
+      if (ytId) {
+        if (yt.current) yt.current.playVideo();
+        else pendingPlay.current = true;
+        return;
+      }
+      audio.current?.play().catch(() => setFailed(true));
+    },
+    pause: () => {
+      pendingPlay.current = false;
+      if (ytId) yt.current?.pauseVideo?.();
+      else audio.current?.pause();
+    },
+  };
+  return api;
+}
+
+const fmt = (t: number) => `${Math.floor(Math.max(0, t) / 60)}:${String(Math.floor(Math.max(0, t) % 60)).padStart(2, '0')}`;
+
+/**
+ * Plays a clip of a song from `start` and stops itself at `stop`, right before
+ * the line players have to sing. Works with an audio file URL or a YouTube link.
+ */
+export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(function SongPlayer({ song }, ref) {
+  const box = useRef<HTMLDivElement>(null);
+  const media = useMediaSource(song?.source ?? '', box, song?.start ?? 0);
+  const raf = useRef(0);
+  const endAt = useRef(0);
+  const startedAt = useRef(0);
+  const [status, setStatus] = useState<Status>('idle');
+  const statusRef = useRef<Status>('idle');
+  const [time, setTime] = useState(0);
+  const mediaRef = useRef(media);
+  mediaRef.current = media;
+
+  const set = (s: Status) => {
+    statusRef.current = s;
+    setStatus(s);
+  };
+
+  useEffect(() => {
+    cancelAnimationFrame(raf.current);
+    if (!song?.source.trim()) set('nosource');
+    else if (!(song.stop > song.start)) set('notimed');
+    else set(media.isYouTube ? 'loading' : 'idle');
+    setTime(song?.start ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.round, song?.source, song?.start, song?.stop]);
+
+  useEffect(() => {
+    if (media.ready && statusRef.current === 'loading') set('idle');
+  }, [media.ready]);
+  useEffect(() => {
+    if (media.failed) set('error');
+  }, [media.failed]);
+
+  const loop = useCallback(() => {
+    const t = mediaRef.current.now();
+    setTime(t);
+    const warm = performance.now() - startedAt.current > 400;
+    if (warm && endAt.current && t >= endAt.current - 0.03) {
+      mediaRef.current.pause();
+      set('ended');
+      return;
+    }
+    raf.current = requestAnimationFrame(loop);
+  }, []);
 
   const begin = useCallback(
     (from: number | null, until: number) => {
-      if (!song || !src) {
+      if (!song || !song.source.trim()) {
         set('nosource');
         return;
       }
-      if (from !== null) seek(from);
+      if (!(song.stop > song.start)) {
+        set('notimed');
+        return;
+      }
+      if (from !== null) mediaRef.current.seek(from);
       endAt.current = until;
       startedAt.current = performance.now();
-      rawPlay();
+      mediaRef.current.play();
       set('playing');
-      onPlay?.();
       cancelAnimationFrame(raf.current);
       raf.current = requestAnimationFrame(loop);
     },
-    [song, src, seek, rawPlay, loop, onPlay],
+    [song, loop],
   );
+
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   useImperativeHandle(
     ref,
     () => ({
       play() {
         if (!song) return;
-        const t = now();
+        const t = mediaRef.current.now();
         const st = statusRef.current;
-        const fresh = st === 'idle' || st === 'ended' || st === 'nosource' || t < song.start - 0.2 || t >= song.stop - 0.05;
+        const fresh = st !== 'paused' || t < song.start - 0.2 || t >= song.stop - 0.05;
         begin(fresh ? song.start : null, song.stop);
       },
       pause() {
         if (statusRef.current !== 'playing') return;
-        rawPause();
+        cancelAnimationFrame(raf.current);
+        mediaRef.current.pause();
         set('paused');
       },
       stop() {
-        rawPause();
+        cancelAnimationFrame(raf.current);
+        mediaRef.current.pause();
         if (song) {
-          seek(song.start);
+          mediaRef.current.seek(song.start);
           setTime(song.start);
         }
-        set('idle');
+        set(song && !(song.stop > song.start) ? 'notimed' : 'idle');
       },
       restart() {
         if (song) begin(song.start, song.stop);
@@ -223,26 +257,30 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null; onPl
         if (song) begin(song.stop, song.stop + ANSWER_SECONDS);
       },
     }),
-    [song, now, begin, rawPause, seek],
+    [song, begin],
   );
 
   const clipLen = song ? Math.max(0.1, song.stop - song.start) : 1;
   const into = song ? Math.min(clipLen, Math.max(0, time - song.start)) : 0;
   const label: Record<Status, string> = {
+    loading: 'Loading YouTube…',
     idle: 'Ready',
     playing: 'Playing',
     paused: 'Paused',
     ended: 'Stopped before the line',
-    error: 'Could not play this audio. Check the link in the Songs tab.',
-    nosource: 'No audio set for this round. Add one in the host console.',
+    error: 'Could not play this song. Check its link in Answer sheet → Songs.',
+    nosource: 'No song set for this round. Add one in Answer sheet → Songs.',
+    notimed: 'Stop time not set. Open Answer sheet → Songs → Set timing.',
   };
 
   return (
     <div className="player-card" aria-live="polite">
-      {ytId && <div className="yt-box" ref={ytBox} />}
+      {media.isYouTube && <div className="yt-box" ref={box} />}
       <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
         <span className="eyebrow">Song clip</span>
-        <span style={{ fontWeight: 700 }}>{label[status]}</span>
+        <span style={{ fontWeight: 700, color: status === 'error' || status === 'nosource' || status === 'notimed' ? 'var(--coral)' : undefined }}>
+          {label[status]}
+        </span>
         <span className="row" style={{ gap: 8 }}>
           <span className="meter" aria-hidden="true">
             <i style={{ width: `${(into / clipLen) * 100}%` }} />

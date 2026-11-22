@@ -53,6 +53,8 @@ export function AnimatedBoard({ rows, rowHeight = 62, limit, unit = 'pts' }: { r
               transform: `translateY(${p * rowHeight}px)`,
               height: rowHeight - 8,
               opacity: p < visible ? 1 : 0,
+              visibility: p < visible ? 'visible' : 'hidden',
+              pointerEvents: p < visible ? undefined : 'none',
               ['--bar' as string]: r.color,
             }}
           >

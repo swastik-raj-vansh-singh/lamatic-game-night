@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getBackend } from '@/lib/backend';
 import { DEMO } from '@/lib/config';
 import { isMuted, setMuted, sfx } from '@/lib/sfx';
-import type { Player, TeamId } from '@/lib/types';
+import type { Player } from '@/lib/types';
 
 export function Bulbs({ count = 18 }: { count?: number }) {
   return (
@@ -24,18 +24,6 @@ export function DemoBanner() {
     <div className="demo-banner" role="note">
       Demo mode: no backend yet, data stays in this browser. Add your Supabase keys to go live.
     </div>
-  );
-}
-
-export const teamStyle = (team: TeamId | undefined | null): CSSProperties =>
-  ({ ['--team' as string]: team ? `var(--team-${team})` : 'var(--line)' }) as CSSProperties;
-
-export function TeamChip({ team }: { team: TeamId | undefined | null }) {
-  if (!team) return null;
-  return (
-    <span className="chip team-chip" data-team={team} style={teamStyle(team)}>
-      Team {team}
-    </span>
   );
 }
 
@@ -59,7 +47,7 @@ export function SoundToggle() {
   );
 }
 
-export function TopBar({ me, team, points, host }: { me?: Player | null; team?: TeamId | null; points?: number; host?: boolean }) {
+export function TopBar({ me, points, host }: { me?: Player | null; points?: number; host?: boolean }) {
   const router = useRouter();
   return (
     <>
@@ -76,7 +64,6 @@ export function TopBar({ me, team, points, host }: { me?: Player | null; team?: 
                   {me.avatar}
                 </span>
                 <span>{me.displayName}</span>
-                <TeamChip team={team} />
                 {typeof points === 'number' && <span className="chip num">{points} pts</span>}
               </span>
             )}
@@ -86,7 +73,7 @@ export function TopBar({ me, team, points, host }: { me?: Player | null; team?: 
                   Stage
                 </Link>
                 <Link className="btn ghost small" href="/host">
-                  Host console
+                  Answer sheet
                 </Link>
               </>
             )}

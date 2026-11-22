@@ -139,12 +139,13 @@ class SupabaseBackend implements Backend {
     return (data as { state: unknown } | null)?.state ?? {};
   }
 
-  async writeState(s: GameState): Promise<Result> {
-    const { error } = await this.sb
-      .from('game_state')
-      .update({ state: s, updated_at: new Date().toISOString() })
-      .eq('id', 1);
-    return { error: error ? friendly(error.message) : undefined };
+  async writeState(s: GameState, expectedVersion: number | null) {
+    let q = this.sb.from('game_state').update({ state: s, updated_at: new Date().toISOString() }).eq('id', 1);
+    if (expectedVersion !== null) q = q.eq('state->>version', String(expectedVersion));
+    const { data, error } = await q.select('id');
+    if (error) return { error: friendly(error.message) };
+    if (!data || data.length === 0) return { conflict: true };
+    return {};
   }
 
   subscribeState(cb: (raw: unknown) => void): Unsubscribe {

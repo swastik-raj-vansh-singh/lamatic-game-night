@@ -184,9 +184,11 @@ class DemoBackend implements Backend {
     return this.read().state;
   }
 
-  async writeState(s: GameState): Promise<Result> {
+  async writeState(s: GameState, expectedVersion: number | null) {
     if (!this.me()?.host) return { error: 'Only the host can change the game.' };
     const db = this.read();
+    const stored = (db.state as Partial<GameState>)?.version;
+    if (expectedVersion !== null && (stored ?? 0) !== expectedVersion) return { conflict: true };
     db.state = s;
     this.write(db);
     return {};
@@ -258,7 +260,8 @@ class DemoBackend implements Backend {
     const db = this.read();
     const s = db.state as Partial<GameState>;
     if (s?.phase !== 'wheel') return { error: 'The wheel is not open yet.' };
-    if (!me || s.winnerId !== me.id) return { error: 'Only the winner can spin the wheel.' };
+    if (!s.winnerId) return { error: 'Pick a winner first.' };
+    if (!me || (s.winnerId !== me.id && !me.host)) return { error: 'Only the winner or the host can spin the wheel.' };
     if (db.wheel) return { error: 'The wheel has already been spun.' };
     const a = new Uint32Array(1);
     crypto.getRandomValues(a);

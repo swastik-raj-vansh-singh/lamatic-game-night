@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ANSWER_MS, TEAM_LABEL, activeTeams, currentAttempt, rankPlayers, roundWinner, sortBuzzes, teamMembers } from '@/lib/game';
-import type { Buzz, GameState, Player, TeamId } from '@/lib/types';
-import { TEAM_IDS } from '@/lib/types';
+import { ANSWER_MS, CORRECT_POINTS, PODIUM_POINTS, currentAttempt, rankPlayers, roundWinner, sortBuzzes } from '@/lib/game';
+import type { Buzz, GameState, Player } from '@/lib/types';
 import { AnimatedBoard, type BoardRow } from './AnimatedBoard';
 import { RingTimer } from './RingTimer';
-import { TeamChip, teamStyle } from './ui';
 
-const nameOf = (players: Player[], id: string | null | undefined) => players.find(p => p.id === id)?.displayName ?? 'Someone';
+const byId = (players: Player[], id: string | null | undefined) => players.find(p => p.id === id);
+const nameOf = (players: Player[], id: string | null | undefined) => byId(players, id)?.displayName ?? 'Someone';
 
 /* ------------------------------------------------------------------ */
 /* Lobby                                                               */
@@ -49,121 +47,75 @@ export function LobbyView({ players, meId, big }: { players: Player[]; meId?: st
 }
 
 /* ------------------------------------------------------------------ */
-/* Game 1: drawing game (link set by the host)                          */
+/* Game 1: skribbl                                                     */
 /* ------------------------------------------------------------------ */
 
-export function Game1View({ game }: { game: GameState }) {
-  const { name, url } = game.game1;
+export function Game1View({ game, players }: { game: GameState; players: Player[] }) {
+  const { name, url, podium } = game.game1;
+  const label = name || 'skribbl.io';
   return (
     <section className="card" style={{ textAlign: 'center', justifyItems: 'center', gap: 16, padding: '34px 22px' }}>
-      <p className="eyebrow">Game 1 · Drawing</p>
-      <h2 style={{ fontSize: 'clamp(2rem, 6vw, 3.6rem)', color: 'var(--bulb)' }}>{name || 'Draw it. Guess it.'}</h2>
-      <p className="lede muted">
-        {name ? 'Join the room, draw badly, guess fast.' : 'The host is picking the drawing game. The join link shows up here.'}
-      </p>
+      <p className="eyebrow">Game 1 · Draw and guess</p>
+      <h2 style={{ fontSize: 'clamp(2rem, 6vw, 3.6rem)', color: 'var(--bulb)' }}>{label}</h2>
+      <p className="lede muted">One person draws, everyone else guesses in the chat. Guess fast to score more.</p>
       {url ? (
         <a className="btn big" href={url} target="_blank" rel="noopener noreferrer">
-          Join {name || 'the game'}
+          Join {label}
         </a>
       ) : (
-        <span className="chip">Link coming soon</span>
+        <span className="chip">The host is creating the room. The Join button appears here.</span>
       )}
-      <p className="muted">Top 3 get points for the final leaderboard: +3, +2 and +1.</p>
+      {podium.some(Boolean) ? (
+        <div className="row" style={{ justifyContent: 'center' }}>
+          {podium.map((pid, i) =>
+            pid ? (
+              <span key={pid} className="name-chip" style={{ animation: 'none' }}>
+                <span className="avatar" aria-hidden="true">
+                  {byId(players, pid)?.avatar}
+                </span>
+                <span>
+                  {['1st', '2nd', '3rd'][i]} · {nameOf(players, pid)} · +{PODIUM_POINTS[i]}
+                </span>
+              </span>
+            ) : null,
+          )}
+        </div>
+      ) : (
+        <p className="muted">When it ends, the top 3 get points for the final leaderboard: +3, +2 and +1.</p>
+      )}
     </section>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Teams reveal                                                        */
+/* Guess the line                                                      */
 /* ------------------------------------------------------------------ */
 
-export function TeamsView({ game, players, meId }: { game: GameState; players: Player[]; meId?: string }) {
-  const sig = useMemo(() => JSON.stringify(game.teams), [game.teams]);
-  const [shuffling, setShuffling] = useState(true);
-  const [flash, setFlash] = useState('');
-  const teams = activeTeams(game);
-  const myTeam = meId ? game.teams[meId] : undefined;
-
-  useEffect(() => {
-    if (!Object.keys(game.teams).length) return;
-    setShuffling(true);
-    const names = players.map(p => p.displayName);
-    const iv = setInterval(() => setFlash(names[Math.floor(Math.random() * names.length)] ?? ''), 90);
-    const t = setTimeout(() => {
-      clearInterval(iv);
-      setShuffling(false);
-    }, 1800);
-    return () => {
-      clearInterval(iv);
-      clearTimeout(t);
-    };
-    // Replay only when the assignment changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sig]);
-
-  if (!teams.length) {
-    return (
-      <div className="shuffle-box">
-        <p className="muted">The host is about to shuffle the teams.</p>
-      </div>
-    );
-  }
-  if (shuffling) {
-    return (
-      <div className="shuffle-box" aria-live="polite">
-        <p className="eyebrow">Shuffling teams</p>
-        <p className="shuffle-name">{flash}</p>
-      </div>
-    );
-  }
+export function RoundHeader({ game }: { game: GameState }) {
   return (
-    <div style={{ display: 'grid', gap: 18 }}>
-      {myTeam && (
-        <div className="card" style={{ ...teamStyle(myTeam), textAlign: 'center', justifyItems: 'center', borderColor: 'var(--team)' }}>
-          <p className="eyebrow">You are on</p>
-          <p className="your-team">{TEAM_LABEL[myTeam]}</p>
-        </div>
-      )}
-      <div className="teams-grid">
-        {teams.map((t, ti) => (
-          <div key={t} className={`team-col${t === myTeam ? ' mine' : ''}`} style={teamStyle(t)}>
-            <h3>{TEAM_LABEL[t]}</h3>
-            {teamMembers(game, players, t).map((p, i) => (
-              <span key={p.id} className={`name-chip${p.id === meId ? ' me' : ''}`} style={{ animationDelay: `${(ti * 2 + i) * 110}ms` }}>
-                <span className="avatar" aria-hidden="true">
-                  {p.avatar}
-                </span>
-                <span>{p.displayName}</span>
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
+    <div className="round-head">
+      <strong>
+        Song {game.round.index + 1} of {game.totalRounds}
+      </strong>
+      {game.round.double && <span className="chip double">Double points</span>}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Round status: who is answering, the 5-second clock, results          */
-/* ------------------------------------------------------------------ */
-
-export function RoundStatusBoard({ game, players, meId, onTimeUp }: { game: GameState; players: Player[]; meId?: string; onTimeUp?: () => void }) {
+export function RoundStatusBoard({ game, players, meId }: { game: GameState; players: Player[]; meId?: string }) {
   const r = game.round;
   const att = currentAttempt(r);
   const won = roundWinner(r);
-  const myTeam = meId ? game.teams[meId] : undefined;
   const lastWrong = r.attempts.filter(a => a.result === 'wrong').at(-1);
-
-  let cls = r.status;
-  let team: TeamId | undefined;
+  let cls: string = r.status;
   let body: React.ReactNode;
 
   if (r.status === 'ready') {
     body = (
       <>
-        <p className="eyebrow">Round {r.index + 1}</p>
+        <p className="eyebrow">Song {r.index + 1}</p>
         <p className="status-title">Get ready</p>
-        <p className="muted">The host is about to play a song. Buzz the moment you know the next line.</p>
+        <p className="muted">A song is about to play. Buzz the moment you know the next line.</p>
       </>
     );
   } else if (r.status === 'open') {
@@ -173,50 +125,48 @@ export function RoundStatusBoard({ game, players, meId, onTimeUp }: { game: Game
         <p className="status-title" style={{ color: 'var(--teal)' }}>
           Listen…
         </p>
-        <p className="muted">
-          {lastWrong ? `${TEAM_LABEL[lastWrong.team]} missed it. Other teams, buzz now!` : 'Know what comes next? Hit the buzzer.'}
-        </p>
+        <p className="muted">{lastWrong ? `${nameOf(players, lastWrong.playerId)} missed it. Anyone else? Buzz now!` : 'Know what comes next? Hit the buzzer.'}</p>
       </>
     );
   } else if (r.status === 'answering' && att) {
-    team = att.team;
-    const mine = myTeam === att.team;
+    const mine = att.playerId === meId;
+    const p = byId(players, att.playerId);
     body = (
       <>
-        <p className="eyebrow">{mine ? "It's your team's turn" : 'Now answering'}</p>
-        <p className="status-title team">{TEAM_LABEL[att.team]}</p>
-        <p style={{ fontWeight: 800 }}>
-          {att.seq > 1 ? `${nameOf(players, att.playerId)} steals the turn!` : `${nameOf(players, att.playerId)} buzzed first.`} Sing the next line!
+        <p className="eyebrow">{mine ? "It's your turn" : att.seq > 1 ? 'Next fastest' : 'Fastest finger'}</p>
+        <p className="status-title" style={{ color: 'var(--bulb)' }}>
+          {p ? `${p.avatar} ${p.displayName}` : 'Someone'}
         </p>
-        <RingTimer runKey={`${r.key}-${att.seq}`} ms={ANSWER_MS} onEnd={onTimeUp} />
+        <p style={{ fontWeight: 800 }}>{mine ? 'Unmute and sing the next line!' : 'Sing the next line!'}</p>
+        <RingTimer runKey={`${r.key}-${att.seq}`} ms={ANSWER_MS} />
       </>
     );
-  } else if (r.status === 'won' || (r.status === 'revealed' && won)) {
-    team = won?.team;
+    cls = 'answering';
+  } else if (won) {
     body = (
       <>
         <p className="eyebrow">Nailed it</p>
-        <p className="status-title team">{won ? TEAM_LABEL[won.team] : ''}</p>
-        <p style={{ fontWeight: 800 }}>
-          {won ? `${nameOf(players, won.playerId)} +${r.awarded?.points[won.playerId] ?? 2}, teammates +${r.double ? 2 : 1} each` : ''}
+        <p className="status-title" style={{ color: 'var(--teal)' }}>
+          {byId(players, won.playerId)?.avatar} {nameOf(players, won.playerId)}
         </p>
+        <p style={{ fontWeight: 800 }}>+{r.awarded?.pts ?? CORRECT_POINTS} points</p>
       </>
     );
     cls = 'won';
   } else {
     body = (
       <>
-        <p className="eyebrow">Round {r.index + 1}</p>
+        <p className="eyebrow">Song {r.index + 1}</p>
         <p className="status-title" style={{ color: 'var(--coral)' }}>
           Nobody got it
         </p>
-        <p className="muted">No points this round.</p>
+        <p className="muted">No points this song.</p>
       </>
     );
   }
 
   return (
-    <div className={`status-board ${cls}`} style={teamStyle(team)} aria-live="polite">
+    <div className={`status-board ${cls}`} style={{ ['--team' as string]: 'var(--bulb)' }} aria-live="polite">
       {body}
       {r.status === 'revealed' && r.reveal && (
         <div style={{ display: 'grid', gap: 6, justifyItems: 'center' }}>
@@ -230,17 +180,6 @@ export function RoundStatusBoard({ game, players, meId, onTimeUp }: { game: Game
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-export function RoundHeader({ game }: { game: GameState }) {
-  return (
-    <div className="round-head">
-      <strong>
-        Round {game.round.index + 1} of {game.totalRounds}
-      </strong>
-      {game.round.double && <span className="chip double">Double points</span>}
     </div>
   );
 }
@@ -261,12 +200,11 @@ export function BuzzList({ game, players, buzzes, limit = 8 }: { game: GameState
       ) : (
         <ol className="buzz-list">
           {sorted.slice(0, limit).map((b, i) => {
-            const team = game.teams[b.playerId];
             const delta = (Date.parse(b.createdAt) - first) / 1000;
             return (
               <li key={b.id} className={stateOf(b)}>
                 <span className="pos">{i + 1}</span>
-                <TeamChip team={team} />
+                <span aria-hidden="true">{byId(players, b.playerId)?.avatar ?? '🎤'}</span>
                 <span className="who">{nameOf(players, b.playerId)}</span>
                 <span className="t">{i === 0 ? 'first' : `+${delta.toFixed(2)}s`}</span>
               </li>
@@ -279,37 +217,46 @@ export function BuzzList({ game, players, buzzes, limit = 8 }: { game: GameState
 }
 
 /* ------------------------------------------------------------------ */
-/* Leaderboard                                                         */
+/* Scoreboards                                                         */
 /* ------------------------------------------------------------------ */
 
-export function LeaderboardView({ game, players, meId, big }: { game: GameState; players: Player[]; meId?: string; big?: boolean }) {
-  const teams = activeTeams(game);
-  const teamRows: BoardRow[] = teams.map(t => ({
-    id: t,
-    label: TEAM_LABEL[t],
-    color: `var(--team-${t})`,
-    from: game.board.prevTeamScores[t] ?? 0,
-    to: game.teamScores[t] ?? 0,
-  }));
-  const playerRows: BoardRow[] = players.map(p => ({
+function rows(players: Player[], game: GameState, meId: string | undefined, fromZero: boolean): BoardRow[] {
+  return players.map(p => ({
     id: p.id,
     label: p.displayName,
     avatar: p.avatar,
-    color: game.teams[p.id] ? `var(--team-${game.teams[p.id]})` : 'var(--bulb)',
-    from: game.board.prevPoints[p.id] ?? 0,
+    color: p.id === meId ? 'var(--teal)' : 'var(--bulb)',
+    from: fromZero ? 0 : game.points[p.id] ?? 0,
     to: game.points[p.id] ?? 0,
     highlight: p.id === meId,
-    tag: <TeamChip team={game.teams[p.id]} />,
   }));
+}
+
+/** Live scoreboard shown during the song rounds. Rows slide when points change. */
+export function LiveBoard({ game, players, meId, limit = 5 }: { game: GameState; players: Player[]; meId?: string; limit?: number }) {
   const ranked = rankPlayers(players, game.points);
   const mine = ranked.find(r => r.player.id === meId);
+  return (
+    <section className="card" aria-labelledby="live-title">
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <h3 id="live-title">Live scoreboard</h3>
+        {mine && <span className="chip">You: #{mine.rank} · {mine.points} pts</span>}
+      </div>
+      {players.length === 0 ? <p className="muted">No players yet.</p> : <AnimatedBoard rows={rows(players, game, meId, false)} rowHeight={54} limit={limit} />}
+    </section>
+  );
+}
 
+/** Final results: everyone counts up from zero and slides into place. */
+export function FinalResults({ game, players, meId, big }: { game: GameState; players: Player[]; meId?: string; big?: boolean }) {
+  const ranked = rankPlayers(players, game.points);
+  const mine = ranked.find(r => r.player.id === meId);
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'end' }}>
         <div style={{ display: 'grid', gap: 6 }}>
-          <p className="eyebrow">Live standings</p>
-          <h2>Leaderboard</h2>
+          <p className="eyebrow">skribbl + Guess the line</p>
+          <h2>Final results</h2>
         </div>
         {mine && (
           <span className="chip" style={{ fontSize: '0.9rem' }}>
@@ -317,22 +264,9 @@ export function LeaderboardView({ game, players, meId, big }: { game: GameState;
           </span>
         )}
       </div>
-      <div className="board-split">
-        {teamRows.length > 0 && (
-          <section className="card">
-            <h3>Teams</h3>
-            <AnimatedBoard rows={teamRows} rowHeight={big ? 76 : 64} />
-          </section>
-        )}
-        <section className="card" style={teamRows.length ? undefined : { gridColumn: '1 / -1' }}>
-          <h3>Players</h3>
-          <AnimatedBoard rows={playerRows} rowHeight={big ? 62 : 56} limit={big ? 8 : 10} />
-        </section>
-      </div>
+      <section className="card">
+        {players.length === 0 ? <p className="muted">No players yet.</p> : <AnimatedBoard rows={rows(players, game, meId, true)} rowHeight={big ? 64 : 56} limit={big ? 10 : 15} />}
+      </section>
     </div>
   );
-}
-
-export function teamOrder(game: GameState): TeamId[] {
-  return TEAM_IDS.filter(t => activeTeams(game).includes(t)).sort((a, b) => (game.teamScores[b] ?? 0) - (game.teamScores[a] ?? 0));
 }

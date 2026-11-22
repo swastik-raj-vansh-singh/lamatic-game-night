@@ -1,20 +1,22 @@
 # Lamatic Game Night
 
-A live game-night site for a remote team on Google Meet:
+A live game-night site for a remote team on Google Meet. Everyone plays for themselves:
 
-1. **Sign in** with any email or Google account, pick a name and an avatar. Names appear live in the lobby.
-2. **Game 1: drawing game.** The host pastes an invite link (skribbl.io, Gartic Phone…) and everyone gets a Join button. The host adds +3/+2/+1 for the top three.
-3. **Game 2: Guess the next line.** Random, balanced teams (15 players → 3 teams of 5). The host plays a clip that stops right before a line. Everyone has a buzzer on their own device. The fastest buzz (server-timed) gets **5 seconds** to sing the next line. Wrong? The turn passes to the next fastest team. Correct: the singer gets **+2**, every teammate **+1**, and the team **+100**. The last round is worth **double**.
-4. **Live leaderboard** after every round, Menti-style: rows slide into their new places and scores count up.
-5. **Finale:** the top scorer spins the prize wheel (3 mystery gifts, 2 "better luck next time"). The server picks the slice and allows one spin, and everyone watches it spin on their own screen.
+1. **Lobby.** People sign in with any email or Google account, pick a name and an avatar, and appear live in the lobby.
+2. **skribbl.** The host pastes a skribbl.io private-room link and everyone gets a Join button. When skribbl ends, the host gives the top three **+3, +2 and +1**.
+3. **Guess the line.** 10 songs. The host plays a clip that stops right before a line. Everyone has a buzzer on their own device. The fastest buzz (timed by the server) gets **5 seconds** to sing the next line. Wrong? The turn passes to the next fastest player. Right: **+2 points** (**+4** in the last song). A live scoreboard slides as points change.
+4. **Results.** Final standings count up and slide into place.
+5. **Prize wheel.** The top scorer spins (from their phone, or the host spins for them on the Stage): 3 mystery gifts, 2 "better luck next time". The server picks the slice, it can be spun once, and everyone watches the same spin.
 
-## The three screens
+## The screens
 
 | Page | Who | What it's for |
 |---|---|---|
-| `/play` | Everyone | Lobby, teams, the buzzer, leaderboard, wheel |
-| `/stage` | Host | **Share this tab on Meet** with "Also share tab audio". Plays the song clips, runs the buzzers, shows the big screen and your controls. |
-| `/host` | Host | Private console: the **correct line** for each round, judging, teams, points, song editor, settings. Keep it on your phone or a second window. |
+| `/play` | Players | Lobby, skribbl Join button, buzzer, live scoreboard, results, wheel |
+| `/stage` | Host, **shared on Meet** with "Also share tab audio" | The main control screen: step bar (1 Lobby → 5 Prize wheel), skribbl link and podium, song player and judge buttons, winner and wheel |
+| `/host` | Host, private (phone) | **Answer sheet**: the correct line and judge buttons for the current song, plus Songs, Players and Reset |
+
+If anyone leaves, refreshes or loses Wi-Fi, they come straight back to where the game is. Everything lives in the database, and every screen also re-syncs on a timer and whenever it comes back into view. Two host screens can be open at once: a save that would overwrite newer changes is rejected and retried.
 
 ## Try it right now (demo mode)
 
@@ -25,60 +27,48 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, sign in with any email address and tick **Sign in as the host**. In the host console → Players, click **Add 14 test players**. Then open the Stage and run a round. Test players buzz on their own. Each extra browser tab you sign into is another player.
+Open http://localhost:3000, sign in with any email and tick **Sign in as the host**. On the Answer sheet → Players, click **Add 14 test players**, then open the Stage and play. Test players buzz on their own. Each extra browser tab you sign into is another player.
 
 ## Go live with Supabase
 
-1. **Create a Supabase project** (a new one, just for game night).
-2. **Database:** Supabase → SQL Editor → paste all of [`supabase/schema.sql`](supabase/schema.sql) → Run. Then make yourself the host:
+1. **Create a Supabase project.**
+2. **Database:** Supabase → SQL Editor → paste all of [`supabase/schema.sql`](supabase/schema.sql) → Run. It is safe to run again after updates. Then make yourself the host:
    ```sql
    insert into public.hosts (email) values ('you@example.com');
    ```
-3. **Sign-in methods** (Supabase → Authentication → Sign In / Providers):
-   - **Google (recommended).** Lamatic uses Google Workspace, so this is one click for everyone. Create an OAuth client in Google Cloud Console (type "Web application"), add `https://<your-project>.supabase.co/auth/v1/callback` as an authorized redirect URI, then paste the client ID and secret into Supabase's Google provider.
-   - **Email link.** Already on by default. Supabase's built-in email sender only allows a few emails per hour, so for 15 people either use Google or add your own SMTP (Authentication → Emails → SMTP settings, for example with Resend).
-4. **Redirect URLs** (Authentication → URL Configuration): set the Site URL to your Vercel URL and add both
-   `http://localhost:3000/auth/callback` and `https://<your-vercel-domain>/auth/callback`.
-5. **Environment variables:** copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings → API; the anon or publishable key, **never** the service-role key).
+3. **Sign-in** (Authentication → Sign In / Providers): turn on **Google** with a Google Cloud OAuth client (redirect URI `https://<project>.supabase.co/auth/v1/callback`, audience **External**, publishing status **In production**). Email links also work, but Supabase's built-in sender only allows a few emails per hour.
+4. **Redirect URLs** (Authentication → URL Configuration): Site URL = your Vercel URL, plus `https://<your-vercel-domain>/auth/callback` and `http://localhost:3000/auth/callback`.
+5. **Environment variables:** `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (the anon or publishable key, **never** the service-role key).
 
 ### What the database enforces
 
-- Anyone with the link can sign in. Only signed-in people can see names, buzzes and scores, and the host can remove anyone from Host → Players.
+- Only signed-in people can see names, buzzes and scores. The host can remove anyone.
 - Only hosts can change the game, read the songs table (it holds the correct lines) or reset the wheel.
-- Buzz times come from the database clock (`clock_timestamp()`), and players can only send which round they buzzed. They can't fake an earlier buzz. Each player can buzz once per round, and only while buzzers are open.
-- Only the crowned winner can spin, only once, and the slice is picked by the database.
-- Every finished round is logged in `round_results`.
+- Buzz times come from the database clock, and players can only send which round they buzzed. Each player buzzes once per song, only while buzzers are open.
+- Only the winner or a host can spin, only once, and the database picks the slice.
+- Every finished song is logged in `round_results`.
 
 ## Songs
 
-Host console → **Songs**: for each of the 10 rounds set the title, artist, an audio source, the second the clip starts, the second it stops (right before the line), and the correct next line.
+Answer sheet → **Songs** has two ready-made lists:
 
-The 10 rounds start as **trial songs**: traditional, public-domain tunes (Twinkle Twinkle, Jingle Bells, Auld Lang Syne…) with instrumental clips generated by `scripts/make-trial-songs.mjs`, so you can practise the whole game before adding real songs. **Use the trial songs** in the Songs tab puts them back at any time.
+- **Practice songs:** traditional, public-domain tunes (Twinkle Twinkle, Jingle Bells, Auld Lang Syne…) with instrumental clips generated by `scripts/make-trial-songs.mjs`. They work right away.
+- **5 English + 5 Hindi hits:** linked to their official YouTube videos. For each one, press **Set timing**, play the song, tap **Stop here** right before a famous line, **Test the clip**, and type that line in the last box.
 
-Audio sources:
-- **Audio files (best):** put `round1.mp3` etc. in `public/songs/` and use `/songs/round1.mp3`. Nothing about the song shows on screen.
-- **YouTube links** also work. The small player is visible on the Stage, so pick a version that doesn't show lyrics.
-
-After a round, **▶ Play the real line** plays the next 8 seconds so everyone hears the answer.
+You can also use your own audio files: put them in `public/songs/` and use `/songs/name.mp3` as the link.
 
 ## Deploy on Vercel
 
-1. Push this folder to GitHub (it can be its own repo or a folder in a bigger one).
-2. Vercel → Add New → Project → import the repo. If the app lives in a subfolder, set **Root Directory** to `game-night`.
-3. Add the two environment variables from `.env.example` under Settings → Environment Variables.
-4. Deploy, then add the Vercel URL to Supabase's redirect URLs (step 4 above).
+Import the repo in Vercel, add the two environment variables, and deploy. Every push to `main` redeploys.
 
 ## Running game night
 
-1. Before the call: add songs, set the Game 1 link (Settings), open `/stage` and `/host`.
-2. On Meet: share the Stage tab with tab audio. Ask everyone to open the site, sign in and pick a name.
-3. Stage → **Start Game 1** → after the drawing game, add the top-3 points in Host → Players.
-4. Stage → **Shuffle teams** (shuffle again if you like) → **Start Round 1**.
-5. Each round: **▶ Play clip** → someone buzzes and the music stops → listen → **✓ Correct** or **✗ Wrong** → **Reveal the line** → **Leaderboard** → next round.
-6. After round 10: **Crown the winner** → they press **Spin the wheel** on their own screen → send their voucher code privately.
-
-Points, teams and rounds can be fixed at any time from the host console. **Restart this round** takes back the points the round gave.
+1. Before the call: get the 10 songs to **Ready** on the Answer sheet, then **Reset → Reset the whole game**.
+2. On Meet: share the **Stage** tab with tab audio. Keep the **Answer sheet** on your phone.
+3. **Start skribbl** → paste the room link → **Show to everyone** → play → pick 1st/2nd/3rd → **Give the points**.
+4. **Start Guess the line** → for each song: **▶ Play song** → someone buzzes and the music stops → **✓ Correct** or **✗ Wrong** → **Reveal the line** → **Next song**.
+5. After song 10: **Final results** → **Open the prize wheel** → the winner spins (or press **Spin for …**) → send the voucher privately.
 
 ## Tech
 
-Next.js 15 (App Router) · React 19 · Supabase (Auth, Postgres, Realtime) · plain CSS. The game rules are pure functions in `src/lib/game.ts`. The host's browser applies them and writes one `game_state` row, and every screen follows that row live.
+Next.js 15 (App Router) · React 19 · Supabase (Auth, Postgres, Realtime) · plain CSS. The game rules are pure functions in `src/lib/game.ts`. The host's browser applies them and writes one `game_state` row with a version number, and every screen follows that row live.
