@@ -27,7 +27,7 @@ import {
   songReady,
 } from '@/lib/game';
 import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost } from '@/lib/hooks';
-import { GAME_NIGHT_SONGS } from '@/lib/songLists';
+import { GAME_NIGHT_SONGS, isUntouchedSampleList } from '@/lib/songLists';
 import type { Song } from '@/lib/types';
 
 type Tab = 'songs' | 'players' | 'reset';
@@ -64,7 +64,19 @@ export default function HostPage() {
   }, [songs.length, apply]);
 
   useEffect(() => {
-    if (ready) void backend.fetchSongs().then(list => setSongs(list.length ? list : placeholderSongs()));
+    if (!ready) return;
+    void backend.fetchSongs().then(async list => {
+      // Still a sample list? Switch to the game night songs automatically.
+      if (isUntouchedSampleList(list)) {
+        const copy = GAME_NIGHT_SONGS.map(s => ({ ...s }));
+        setSongs(copy);
+        const { error } = await backend.saveSongs(copy);
+        toast.show(error ?? `Your ${copy.length} game night songs are loaded`);
+        return;
+      }
+      setSongs(list);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, backend]);
   useEffect(() => {
     if (ready && empty) void backend.writeState(initialState(), null);

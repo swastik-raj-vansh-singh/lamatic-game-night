@@ -36,3 +36,27 @@ export const GAME_NIGHT_SONGS: Song[] = [
   { round: 10, title: 'Swalla', artist: 'Jason Derulo ft. Nicki Minaj, Ty Dolla $ign', source: 'https://www.youtube.com/watch?v=NGLxoKOvzu4', start: 26, stop: 36, line: '' },
   { round: 11, title: 'Baby', artist: 'Justin Bieber ft. Ludacris', source: 'https://www.youtube.com/watch?v=kffacxfA7G4', start: 0, stop: 14, line: '' },
 ];
+
+/** Titles from the sample lists shipped earlier (practice songs and the first hits list). */
+const SAMPLE_TITLES = new Set([
+  ...TRIAL_SONGS.map(s => s.title),
+  'Shape of You', 'Kesariya', 'Believer', 'Tum Hi Ho', 'See You Again', 'Badtameez Dil',
+  'Someone Like You', 'Kal Ho Naa Ho', 'Bohemian Rhapsody', 'Kala Chashma',
+]);
+const GAME_NIGHT_ONLY = new Set(GAME_NIGHT_SONGS.map(s => s.title).filter(t => !SAMPLE_TITLES.has(t)));
+
+/**
+ * True when the saved list is still one of the untouched sample lists, so the
+ * answer sheet can switch to the game night songs without losing any work.
+ */
+export function isUntouchedSampleList(list: Song[]): boolean {
+  if (!list.length) return true;
+  if (list.some(s => GAME_NIGHT_ONLY.has(s.title))) return false;
+  return list.every(s => {
+    if (/^Song \d+ title$/.test(s.title)) return true;
+    if (!SAMPLE_TITLES.has(s.title)) return false;
+    const trial = TRIAL_SONGS.find(t => t.title === s.title);
+    if (trial) return s.source === trial.source && s.line === trial.line;
+    return !s.line.trim();
+  });
+}

@@ -2,7 +2,7 @@ import type { Attempt, Buzz, GameState, Player, Playback, RoundState, Song } fro
 import { TRIAL_SONGS } from './songLists';
 
 export const TOTAL_ROUNDS = 10;
-export const ANSWER_MS = 5000;
+export const ANSWER_MS = 7000;
 /** Points for singing the right line. Doubled in the last round. */
 export const CORRECT_POINTS = 2;
 /** skribbl podium: 1st, 2nd, 3rd. */

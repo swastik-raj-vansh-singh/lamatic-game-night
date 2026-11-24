@@ -4,7 +4,7 @@ A live game-night site for a remote team on Google Meet. Everyone plays for them
 
 1. **Lobby.** People sign in with any email or Google account, pick a name and an avatar, and appear live in the lobby.
 2. **skribbl.** The host pastes a skribbl.io private-room link and everyone gets a Join button. When skribbl ends, the host gives the top three **+3, +2 and +1**.
-3. **Guess the line.** 10 songs. The host plays a clip that stops right before a line. Everyone has a buzzer on their own device. The fastest buzz (timed by the server) gets **5 seconds** to sing the next line. Wrong? The turn passes to the next fastest player. Right: **+2 points** (**+4** in the last song). A live scoreboard slides as points change.
+3. **Guess the line.** One round per song (11 on the game night list). The host plays a clip that stops right before a line. Everyone has a buzzer on their own device. The fastest buzz (timed by the server) gets **7 seconds** to sing the next line. Wrong? The turn passes to the next fastest player. Right: **+2 points** (**+4** in the last song). A live scoreboard slides as points change.
 4. **Results.** Final standings count up and slide into place.
 5. **Prize wheel.** The top scorer spins (from their phone, or the host spins for them on the Stage): 3 mystery gifts, 2 "better luck next time". The server picks the slice, it can be spun once, and everyone watches the same spin.
 

@@ -21,7 +21,7 @@ export type Phase = 'lobby' | 'game1' | 'round' | 'leaderboard' | 'wheel';
 /**
  * ready     – round set up, waiting for the host to press Play
  * open      – song is playing / buzzers are live, nobody is answering
- * answering – one player has their 5 seconds
+ * answering – one player has their 7 seconds
  * won       – someone sang the right line
  * failed    – the host closed the round without a winner
  * revealed  – the host showed the correct line to everyone

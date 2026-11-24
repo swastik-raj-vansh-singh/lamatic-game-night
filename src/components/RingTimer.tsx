@@ -6,7 +6,7 @@ import { sfx } from '@/lib/sfx';
 
 const C = 2 * Math.PI * 54;
 
-/** 5-second answer clock. Restarts when `runKey` changes. */
+/** Answer clock (7 seconds). Restarts when `runKey` changes. */
 export function RingTimer({ runKey, ms, onEnd, sound = true }: { runKey: string | null; ms: number; onEnd?: () => void; sound?: boolean }) {
   const left = useCountdown(runKey, ms, () => {
     if (sound) sfx.timeUp();
