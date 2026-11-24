@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PrizeReveal, celebrate } from '@/components/PrizeReveal';
-import { SongPlayer, type PlayRange, type SongPlayerHandle } from '@/components/SongPlayer';
+import { SongPlayer, youtubeId, type PlayRange, type SongPlayerHandle } from '@/components/SongPlayer';
 import { Wheel } from '@/components/Wheel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
 import { Bulbs, ConfirmButton, DemoBanner, Loading, SoundToggle } from '@/components/ui';
@@ -318,6 +318,15 @@ export default function StagePage() {
             </div>
             <div style={{ display: 'grid', gap: 16 }}>
               <SongPlayer ref={player} song={song} />
+              {song && youtubeId(song.source) && (
+                <p className="hint">
+                  Backup if the song won&apos;t play:{' '}
+                  <a href={`https://www.youtube.com/watch?v=${youtubeId(song.source)}&t=${Math.floor(song.start)}s`} target="_blank" rel="noopener noreferrer">
+                    open it on YouTube at {Math.floor(song.start / 60)}:{String(Math.floor(song.start % 60)).padStart(2, '0')}
+                  </a>
+                  , share that tab on Meet and press pause yourself before the line. Buzzers and scoring keep working.
+                </p>
+              )}
               <div className="card" style={{ gap: 10 }}>
                 <div className="row" style={{ justifyContent: 'space-between' }}>
                   <h3>Song plays on</h3>
@@ -333,7 +342,7 @@ export default function StagePage() {
                 <p className="hint">
                   {game.playOnDevices
                     ? 'Each player hears the song on their own device and it stops there when someone buzzes. On Meet, share this tab without tab audio so nobody hears it twice.'
-                    : 'Only this screen plays the song. On Meet, share this tab with "Also share tab audio" turned on.'}
+                    : 'Recommended. Only this screen plays the song: on Meet, share this tab with "Also share tab audio" turned on, and everyone hears it at the same moment.'}
                 </p>
               </div>
               <BuzzList game={game} players={players} buzzes={buzzes} limit={8} />

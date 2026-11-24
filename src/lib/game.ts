@@ -51,7 +51,7 @@ export function initialState(): GameState {
     round: freshRound(0, TOTAL_ROUNDS, '1-start'),
     totalRounds: TOTAL_ROUNDS,
     winnerId: null,
-    playOnDevices: true,
+    playOnDevices: false,
     hostIds: [],
     version: 0,
   };
@@ -77,7 +77,7 @@ export function normalizeState(raw: unknown): GameState {
     game1: { ...base.game1, ...(r.game1 ?? {}), podium: Array.isArray(r.game1?.podium) ? r.game1!.podium : [] },
     round,
     points: r.points ?? {},
-    playOnDevices: r.playOnDevices !== false,
+    playOnDevices: r.playOnDevices === true,
     hostIds: Array.isArray(r.hostIds) ? r.hostIds.filter(x => typeof x === 'string') : [],
     version: typeof r.version === 'number' ? r.version : 0,
   };
