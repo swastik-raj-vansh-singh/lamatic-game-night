@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { checkSource } from '@/components/SongPlayer';
 import { TimingTool } from '@/components/TimingTool';
 import { BuzzList } from '@/components/views';
 import { ConfirmButton, Loading, TopBar, useToast } from '@/components/ui';
@@ -22,10 +23,11 @@ import {
   resetRound,
   revealAnswer,
   roundFinished,
+  setTotalRounds,
   songReady,
 } from '@/lib/game';
 import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost } from '@/lib/hooks';
-import { FAMOUS_SONGS } from '@/lib/songLists';
+import { GAME_NIGHT_SONGS } from '@/lib/songLists';
 import type { Song } from '@/lib/types';
 
 type Tab = 'songs' | 'players' | 'reset';
@@ -47,11 +49,19 @@ export default function HostPage() {
   const [timing, setTiming] = useState<number | null>(null);
   const [showAnswer, setShowAnswer] = useState(true);
   const [dirty, setDirty] = useState(false);
+  const [checks, setChecks] = useState<Record<number, 'checking' | { ok: boolean; reason?: string }>>({});
+  const [checking, setChecking] = useState(false);
+  const checkBox = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const backend = getBackend();
 
   useBuzzEngine(game, buzzes, apply);
   useRegisterHost(game, user?.id, apply);
+
+  // The number of song rounds follows the song list.
+  useEffect(() => {
+    if (songs.length) void apply(s => setTotalRounds(s, songs.length));
+  }, [songs.length, apply]);
 
   useEffect(() => {
     if (ready) void backend.fetchSongs().then(list => setSongs(list.length ? list : placeholderSongs()));
@@ -205,7 +215,7 @@ export default function HostPage() {
         {tab === 'songs' && (
           <section className="card">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3>Guess the line · 10 songs</h3>
+              <h3>Guess the line · {songs.length} songs</h3>
               <button type="button" onClick={() => save(songs)} className={dirty ? '' : 'ghost'}>
                 {dirty ? 'Save changes' : 'Saved'}
               </button>
@@ -213,19 +223,45 @@ export default function HostPage() {
             <div className="row">
               <ConfirmButton
                 label="Load practice songs (ready to play)"
-                confirmLabel="Click again: replace all 10"
+                confirmLabel="Click again: replace the list"
                 onConfirm={() => loadList(placeholderSongs(), 'Practice songs')}
               />
               <ConfirmButton
-                label="Load 5 English + 5 Hindi hits"
-                confirmLabel="Click again: replace all 10"
-                onConfirm={() => loadList(FAMOUS_SONGS, 'English + Hindi hits')}
+                label={`Load the game night songs (${GAME_NIGHT_SONGS.length})`}
+                confirmLabel="Click again: replace the list"
+                onConfirm={() => loadList(GAME_NIGHT_SONGS, 'Game night songs')}
               />
+              <button
+                type="button"
+                className="teal"
+                disabled={checking || !songs.length}
+                onClick={async () => {
+                  if (!checkBox.current) return;
+                  setChecking(true);
+                  setChecks({});
+                  for (const s of songs) {
+                    setChecks(c => ({ ...c, [s.round]: 'checking' }));
+                    const res = await checkSource(s.source, checkBox.current);
+                    setChecks(c => ({ ...c, [s.round]: res }));
+                  }
+                  setChecking(false);
+                }}
+              >
+                {checking ? 'Checking…' : 'Check all songs play'}
+              </button>
             </div>
             <p className="hint">
-              <b>Practice songs</b> are old public-domain tunes that work right away. The <b>English + Hindi hits</b> come with their official YouTube videos; for each
-              one press <b>Set timing</b>, tap <b>Stop here</b> right before a famous line, and type that line in the last box.
+              <b>Practice songs</b> are old public-domain tunes that work right away. The <b>game night songs</b> come with their official YouTube videos and your
+              clip times: type each correct line in the last box, and use <b>Set timing</b> → <b>Test the clip</b> to check or nudge a clip.
             </p>
+
+            <div ref={checkBox} className="yt-box" hidden={!checking} aria-hidden="true" />
+            {Object.keys(checks).length > 0 && !checking && (
+              <p className={Object.values(checks).every(c => c !== 'checking' && c.ok) ? 'ok' : 'error'}>
+                {Object.values(checks).filter(c => c !== 'checking' && c.ok).length} of {songs.length} songs play in this browser.
+                {Object.values(checks).some(c => c !== 'checking' && !c.ok) ? ' Swap the ones marked ✗ for another upload of the song.' : ''}
+              </p>
+            )}
 
             {timing !== null && songs.find(s => s.round === timing) && (
               <TimingTool song={songs.find(s => s.round === timing)!} onChange={patch => update(timing, patch, true)} onClose={() => setTiming(null)} />
@@ -276,9 +312,15 @@ export default function HostPage() {
                           />
                         </td>
                         <td>
-                          <span className={`chip${st.ok ? '' : ''}`} style={{ color: st.ok ? 'var(--teal)' : 'var(--coral)' }}>
+                          <span className="chip" style={{ color: st.ok ? 'var(--teal)' : 'var(--coral)' }}>
                             {st.label}
                           </span>
+                          {checks[s.round] === 'checking' && <div className="hint">Checking…</div>}
+                          {checks[s.round] && checks[s.round] !== 'checking' && (
+                            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: (checks[s.round] as { ok: boolean }).ok ? 'var(--teal)' : 'var(--coral)' }}>
+                              {(checks[s.round] as { ok: boolean; reason?: string }).ok ? '✓ Plays' : `✗ ${(checks[s.round] as { reason?: string }).reason}`}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

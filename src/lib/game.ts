@@ -198,6 +198,15 @@ export function setPlayback(s: GameState, status: Playback['status'], from = 0, 
   return { ...s, round: { ...s.round, playback: { status, from, until, seq } } };
 }
 
+/** The number of song rounds follows the host's song list. */
+export function setTotalRounds(s: GameState, n: number): GameState | null {
+  const total = Math.max(1, Math.min(50, n));
+  if (s.totalRounds === total) return null;
+  const index = Math.min(s.round.index, total - 1);
+  const round = index === s.round.index ? { ...s.round, double: index === total - 1 } : freshRound(index, total);
+  return { ...s, totalRounds: total, round };
+}
+
 export function roundWinner(r: RoundState): Attempt | null {
   return r.attempts.find(a => a.result === 'correct') ?? null;
 }

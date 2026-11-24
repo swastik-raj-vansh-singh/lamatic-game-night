@@ -28,6 +28,7 @@ import {
   setGame1Podium,
   setPlayback,
   setPhase,
+  setTotalRounds,
   songReady,
 } from '@/lib/game';
 import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost, useWheel } from '@/lib/hooks';
@@ -156,6 +157,11 @@ export default function StagePage() {
 
   useBuzzEngine(game, buzzes, apply);
   useRegisterHost(game, user?.id, apply);
+
+  // The number of song rounds follows the song list.
+  useEffect(() => {
+    if (songs.length) void apply(s => setTotalRounds(s, songs.length));
+  }, [songs.length, apply]);
 
   // Share the current song's link and timing so players' phones load it before Play.
   useEffect(() => {

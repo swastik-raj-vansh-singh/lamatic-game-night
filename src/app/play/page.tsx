@@ -222,7 +222,7 @@ function PlayerAudio({ game }: { game: GameState }) {
           <span className="eyebrow">Song on this phone</span>
           <b>
             {media.failed
-              ? 'This song does not play here. Listen on Meet.'
+              ? "This song won't play on this device. Listen on the host's screen."
               : !media.ready
                 ? 'Loading the song…'
                 : state === 'playing'

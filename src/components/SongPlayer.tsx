@@ -36,6 +36,14 @@ declare global {
 /** How long "Play the real line" keeps playing after the stop point. */
 const ANSWER_SECONDS = 8;
 
+/** Plain-language reason for a YouTube player error code. */
+export function youtubeError(code: unknown): string {
+  if (code === 101 || code === 150 || code === 152) return 'The owner blocks this video outside YouTube. Use another upload of the song.';
+  if (code === 100) return 'This video was removed or is private.';
+  if (code === 2) return 'This YouTube link is not valid.';
+  return 'This video could not be played.';
+}
+
 export function youtubeId(src: string): string | null {
   const m = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/);
   return m ? m[1] : null;
@@ -66,12 +74,12 @@ export function useMediaSource(source: string, box: React.RefObject<HTMLDivEleme
   const audio = useRef<HTMLAudioElement | null>(null);
   const yt = useRef<YTPlayer | null>(null);
   const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const pendingPlay = useRef(false);
 
   useEffect(() => {
     setReady(false);
-    setFailed(false);
+    setFailed(null);
     pendingPlay.current = false;
     if (!src) return;
     if (!ytId) {
@@ -79,7 +87,7 @@ export function useMediaSource(source: string, box: React.RefObject<HTMLDivEleme
       a.preload = 'auto';
       audio.current = a;
       const onReady = () => setReady(true);
-      const onErr = () => setFailed(true);
+      const onErr = () => setFailed('This audio file could not be loaded. Check the link.');
       a.addEventListener('canplay', onReady);
       a.addEventListener('loadedmetadata', onReady);
       a.addEventListener('error', onErr);
@@ -112,7 +120,7 @@ export function useMediaSource(source: string, box: React.RefObject<HTMLDivEleme
               player?.playVideo();
             }
           },
-          onError: () => setFailed(true),
+          onError: (e: { data?: unknown }) => setFailed(youtubeError(e?.data)),
         },
       });
     });
@@ -144,7 +152,7 @@ export function useMediaSource(source: string, box: React.RefObject<HTMLDivEleme
         else pendingPlay.current = true;
         return;
       }
-      audio.current?.play().catch(() => setFailed(true));
+      audio.current?.play().catch(() => setFailed('The browser blocked playback. Click anywhere on the page, then try again.'));
     },
     pause: () => {
       pendingPlay.current = false;
@@ -234,6 +242,10 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
         set('nosource');
         return null;
       }
+      if (mediaRef.current.failed) {
+        set('error');
+        return null;
+      }
       const start = from ?? mediaRef.current.now();
       if (from !== null) mediaRef.current.seek(from);
       endAt.current = until ?? 0;
@@ -296,7 +308,7 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
     playing: 'Playing',
     paused: 'Paused',
     ended: 'Stopped before the line',
-    error: 'Could not play this song. Check its link in Answer sheet → Songs.',
+    error: `${media.failed ?? 'Could not play this song.'} (Answer sheet → Songs)`,
     nosource: 'No song set for this round. Add one in Answer sheet → Songs.',
     notimed: 'No stop time set: it will play until you press Pause. Set one in Answer sheet → Songs.',
   };
@@ -321,3 +333,63 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
     </div>
   );
 });
+
+/**
+ * Tries a song in this browser: loads it (muted) and reports whether it really
+ * starts playing. Used by "Check all songs" on the answer sheet.
+ */
+export async function checkSource(src: string, mount: HTMLElement): Promise<{ ok: boolean; reason?: string }> {
+  const source = src.trim();
+  if (!source) return { ok: false, reason: 'No link' };
+  const id = youtubeId(source);
+  if (!id) {
+    return new Promise(resolve => {
+      const a = new Audio(source);
+      const t = setTimeout(() => resolve({ ok: false, reason: 'Audio did not load' }), 10000);
+      a.addEventListener('canplay', () => {
+        clearTimeout(t);
+        resolve({ ok: true });
+      });
+      a.addEventListener('error', () => {
+        clearTimeout(t);
+        resolve({ ok: false, reason: 'Audio file not found' });
+      });
+    });
+  }
+  const YT = await loadYouTube();
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    mount.innerHTML = '';
+    mount.appendChild(el);
+    let done = false;
+    let player: (YTPlayer & { mute?: () => void; getPlayerState?: () => number }) | null = null;
+    const finish = (r: { ok: boolean; reason?: string }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        player?.destroy();
+      } catch {
+        /* already gone */
+      }
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish({ ok: false, reason: 'Did not start within 12 seconds' }), 12000);
+    player = new YT.Player(el, {
+      width: 200,
+      height: 113,
+      videoId: id,
+      playerVars: { playsinline: 1, mute: 1, controls: 0 },
+      events: {
+        onReady: () => {
+          player?.mute?.();
+          player?.playVideo();
+        },
+        onStateChange: (e: { data?: number }) => {
+          if (e?.data === 1) finish({ ok: true });
+        },
+        onError: (e: { data?: unknown }) => finish({ ok: false, reason: youtubeError(e?.data) }),
+      },
+    }) as YTPlayer;
+  });
+}

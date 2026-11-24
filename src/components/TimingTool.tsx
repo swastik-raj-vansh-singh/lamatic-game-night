@@ -92,7 +92,7 @@ export function TimingTool({ song, onChange, onClose }: { song: Song; onChange: 
               <span className="display num" style={{ fontSize: '2rem', color: 'var(--bulb)' }}>
                 {fmt(time)}
               </span>
-              <span className="muted">{media.failed ? 'This link does not play here.' : media.ready ? (testing ? 'Testing the clip…' : playing ? 'Playing' : 'Paused') : 'Loading…'}</span>
+              <span className="muted">{media.failed ? media.failed : media.ready ? (testing ? 'Testing the clip…' : playing ? 'Playing' : 'Paused') : 'Loading…'}</span>
             </div>
           </div>
           <div className="row">

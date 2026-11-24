@@ -19,19 +19,20 @@ export const TRIAL_SONGS: Song[] = [
 ];
 
 /**
- * Five English and five Hindi hits, linked to their official YouTube videos.
- * The clip timing and the correct line are left for the host: open the Songs
- * tab, use "Set timing" to mark where the clip stops, and type the line.
+ * The game night song list, with the clip timing the host picked. Each link is
+ * the official upload, checked to play inside the site. The correct line is
+ * typed by the host in Answer sheet → Songs.
  */
-export const FAMOUS_SONGS: Song[] = [
-  { round: 1, title: 'Shape of You', artist: 'Ed Sheeran', source: 'https://www.youtube.com/watch?v=JGwWNGJdvx8', start: 0, stop: 0, line: '' },
-  { round: 2, title: 'Kesariya', artist: 'Arijit Singh · Brahmāstra', source: 'https://www.youtube.com/watch?v=BddP6PYo2gs', start: 0, stop: 0, line: '' },
-  { round: 3, title: 'Believer', artist: 'Imagine Dragons', source: 'https://www.youtube.com/watch?v=7wtfhZwyrcc', start: 0, stop: 0, line: '' },
-  { round: 4, title: 'Tum Hi Ho', artist: 'Arijit Singh · Aashiqui 2', source: 'https://www.youtube.com/watch?v=IJq0yyWug1k', start: 0, stop: 0, line: '' },
-  { round: 5, title: 'See You Again', artist: 'Wiz Khalifa ft. Charlie Puth', source: 'https://www.youtube.com/watch?v=RgKAFK5djSk', start: 0, stop: 0, line: '' },
-  { round: 6, title: 'Badtameez Dil', artist: 'Benny Dayal · Yeh Jawaani Hai Deewani', source: 'https://www.youtube.com/watch?v=II2EO3Nw4m0', start: 0, stop: 0, line: '' },
-  { round: 7, title: 'Someone Like You', artist: 'Adele', source: 'https://www.youtube.com/watch?v=hLQl3WQQoQ0', start: 0, stop: 0, line: '' },
-  { round: 8, title: 'Kal Ho Naa Ho', artist: 'Sonu Nigam · Kal Ho Naa Ho', source: 'https://www.youtube.com/watch?v=g0eO74UmRBs', start: 0, stop: 0, line: '' },
-  { round: 9, title: 'Bohemian Rhapsody', artist: 'Queen', source: 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ', start: 0, stop: 0, line: '' },
-  { round: 10, title: 'Kala Chashma', artist: 'Badshah, Neha Kakkar · Baar Baar Dekho', source: 'https://www.youtube.com/watch?v=4WRJHbL4dAk', start: 0, stop: 0, line: '' },
+export const GAME_NIGHT_SONGS: Song[] = [
+  { round: 1, title: 'Die With A Smile', artist: 'Lady Gaga, Bruno Mars', source: 'https://www.youtube.com/watch?v=kPa7bsKwL-c', start: 30, stop: 44, line: '' },
+  { round: 2, title: 'Tumhi Ho Bandhu', artist: 'Neeraj Shridhar, Kavita Seth · Cocktail', source: 'https://www.youtube.com/watch?v=o1RducJbUdc', start: 50, stop: 64, line: '' },
+  { round: 3, title: 'Dilliwaali Girlfriend', artist: 'Arijit Singh, Sunidhi Chauhan · Yeh Jawaani Hai Deewani', source: 'https://www.youtube.com/watch?v=frIxzllegWg', start: 13, stop: 30, line: '' },
+  { round: 4, title: 'Beauty and the Beast', artist: 'Ariana Grande, John Legend', source: 'https://www.youtube.com/watch?v=axySrE0Kg6k', start: 0, stop: 14, line: '' },
+  { round: 5, title: 'Closer', artist: 'The Chainsmokers ft. Halsey', source: 'https://www.youtube.com/watch?v=0zGcUoRlhmw', start: 36, stop: 50, line: '' },
+  { round: 6, title: 'Shape of You', artist: 'Ed Sheeran', source: 'https://www.youtube.com/watch?v=JGwWNGJdvx8', start: 40, stop: 51, line: '' },
+  { round: 7, title: 'Perfect', artist: 'Ed Sheeran', source: 'https://www.youtube.com/watch?v=2Vv-BfVoq4g', start: 47, stop: 66, line: '' },
+  { round: 8, title: 'Love Story', artist: 'Taylor Swift', source: 'https://www.youtube.com/watch?v=8xg3vE8Ie_E', start: 48, stop: 64, line: '' },
+  { round: 9, title: 'Badtameez Dil', artist: 'Benny Dayal · Yeh Jawaani Hai Deewani', source: 'https://www.youtube.com/watch?v=II2EO3Nw4m0', start: 26, stop: 37, line: '' },
+  { round: 10, title: 'Swalla', artist: 'Jason Derulo ft. Nicki Minaj, Ty Dolla $ign', source: 'https://www.youtube.com/watch?v=NGLxoKOvzu4', start: 26, stop: 36, line: '' },
+  { round: 11, title: 'Baby', artist: 'Justin Bieber ft. Ludacris', source: 'https://www.youtube.com/watch?v=kffacxfA7G4', start: 0, stop: 14, line: '' },
 ];

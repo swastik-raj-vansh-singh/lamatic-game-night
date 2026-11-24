@@ -206,7 +206,10 @@ class SupabaseBackend implements Backend {
       answer_line: s.line,
     }));
     const { error } = await this.sb.from('songs').upsert(rows, { onConflict: 'round' });
-    return { error: error ? friendly(error.message) : undefined };
+    if (error) return { error: friendly(error.message) };
+    const last = Math.max(0, ...songs.map(s => s.round));
+    const { error: delError } = await this.sb.from('songs').delete().gt('round', last);
+    return { error: delError ? friendly(delError.message) : undefined };
   }
 
   async fetchWheel(): Promise<WheelSpin> {
