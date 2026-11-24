@@ -31,7 +31,7 @@ import {
   setTotalRounds,
   songReady,
 } from '@/lib/game';
-import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost, useWheel } from '@/lib/hooks';
+import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost, useSongs, useWheel } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
 import type { GameState, Player, Song } from '@/lib/types';
 
@@ -128,7 +128,7 @@ export default function StagePage() {
   const { apply, error } = useHostActions(game);
   const buzzes = useBuzzes(game?.phase === 'round' ? game.round.key : null);
   const { spin, fresh } = useWheel();
-  const [songs, setSongs] = useState<Song[]>([]);
+  const { songs } = useSongs(ready, game, apply, { resync: true });
   const [showPrize, setShowPrize] = useState(false);
   const [localSpin, setLocalSpin] = useState<number | null>(null);
   const [spinError, setSpinError] = useState<string | null>(null);
@@ -142,14 +142,6 @@ export default function StagePage() {
   const song = songs.find(s => s.round === (game?.round.index ?? 0) + 1) ?? null;
 
   useEffect(() => setOrigin(window.location.host), []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const load = () => backend.fetchSongs().then(setSongs);
-    void load();
-    window.addEventListener('focus', load);
-    return () => window.removeEventListener('focus', load);
-  }, [ready, backend]);
 
   useEffect(() => {
     if (ready && empty) void backend.writeState(initialState(), null);

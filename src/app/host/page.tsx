@@ -26,8 +26,8 @@ import {
   setTotalRounds,
   songReady,
 } from '@/lib/game';
-import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost } from '@/lib/hooks';
-import { GAME_NIGHT_SONGS, isUntouchedSampleList } from '@/lib/songLists';
+import { useBuzzEngine, useBuzzes, useGameState, useGate, useHostActions, useRegisterHost, useSongs } from '@/lib/hooks';
+import { GAME_NIGHT_SONGS } from '@/lib/songLists';
 import type { Song } from '@/lib/types';
 
 type Tab = 'songs' | 'players' | 'reset';
@@ -45,7 +45,6 @@ export default function HostPage() {
   const { apply, error } = useHostActions(game);
   const buzzes = useBuzzes(game?.phase === 'round' ? game.round.key : null);
   const [tab, setTab] = useState<Tab>('songs');
-  const [songs, setSongs] = useState<Song[]>([]);
   const [timing, setTiming] = useState<number | null>(null);
   const [showAnswer, setShowAnswer] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -54,6 +53,7 @@ export default function HostPage() {
   const checkBox = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const backend = getBackend();
+  const { songs, setSongs } = useSongs(ready, game, apply, { onNotice: m => toast.show(m) });
 
   useBuzzEngine(game, buzzes, apply);
   useRegisterHost(game, user?.id, apply);
@@ -63,21 +63,6 @@ export default function HostPage() {
     if (songs.length) void apply(s => setTotalRounds(s, songs.length));
   }, [songs.length, apply]);
 
-  useEffect(() => {
-    if (!ready) return;
-    void backend.fetchSongs().then(async list => {
-      // Still a sample list? Switch to the game night songs automatically.
-      if (isUntouchedSampleList(list)) {
-        const copy = GAME_NIGHT_SONGS.map(s => ({ ...s }));
-        setSongs(copy);
-        const { error } = await backend.saveSongs(copy);
-        toast.show(error ?? `Your ${copy.length} game night songs are loaded`);
-        return;
-      }
-      setSongs(list);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, backend]);
   useEffect(() => {
     if (ready && empty) void backend.writeState(initialState(), null);
   }, [ready, empty, backend]);
@@ -103,6 +88,20 @@ export default function HostPage() {
     setSongs(next);
     if (autosave) void save(next, true);
     else setDirty(true);
+  };
+  /** Change the play order: songs play in the order shown. */
+  const move = (round: number, dir: -1 | 1) => {
+    const i = songs.findIndex(s => s.round === round);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= songs.length) return;
+    const next = songs.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    const renumbered = next.map((s, k) => ({ ...s, round: k + 1 }));
+    setSongs(renumbered);
+    setTiming(null);
+    setChecks({});
+    void save(renumbered, true);
+    toast.show(`"${songs[i].title || 'Song'}" is now song ${j + 1}`);
   };
   const loadList = async (list: Song[], label: string) => {
     const copy = list.map(s => ({ ...s }));
@@ -297,7 +296,25 @@ export default function HostPage() {
                     const st = songStatus(s);
                     return (
                       <tr key={s.round}>
-                        <td className="num">{s.round}</td>
+                        <td>
+                          <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                            <b className="num" style={{ minWidth: '2ch' }}>
+                              {s.round}
+                            </b>
+                            <button type="button" className="ghost small" aria-label={`Move ${s.title || 'song'} up`} disabled={s.round === 1} onClick={() => move(s.round, -1)}>
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost small"
+                              aria-label={`Move ${s.title || 'song'} down`}
+                              disabled={s.round === songs.length}
+                              onClick={() => move(s.round, 1)}
+                            >
+                              ↓
+                            </button>
+                          </span>
+                        </td>
                         <td>
                           <input aria-label={`Song ${s.round} title`} value={s.title} onChange={e => update(s.round, { title: e.target.value })} />
                         </td>

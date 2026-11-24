@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBackend } from './backend';
 import { isValidEmail } from './config';
 import { isEmptyState, nextCandidate, normalizeState, registerHost, startNextAttempt } from './game';
-import type { AuthUser, Buzz, GameState, Player, WheelSpin } from './types';
+import { GAME_NIGHT_SONGS, SONG_LIST_VERSION, isUntouchedSampleList, upgradeSongList } from './songLists';
+import type { AuthUser, Buzz, GameState, Player, Song, WheelSpin } from './types';
 
 /**
  * Live updates come over Supabase Realtime. As a backup, every hook also
@@ -223,6 +224,64 @@ export function useBuzzEngine(game: GameState | null, buzzes: Buzz[], apply: Ret
     }, 350);
     return () => clearTimeout(t);
   }, [game, buzzes, apply]);
+}
+
+/**
+ * The host's song list. Switches an untouched sample list to the game night
+ * songs, applies requested timing changes once, and (on the Stage) re-reads
+ * the list so changes made on the Answer sheet show up.
+ */
+export function useSongs(
+  ready: boolean,
+  game: GameState | null,
+  apply: ReturnType<typeof useHostActions>['apply'],
+  opts: { resync?: boolean; onNotice?: (msg: string) => void } = {},
+) {
+  const [songs, setSongs] = useState<Song[]>([]);
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const noticeRef = useRef(opts.onNotice);
+  noticeRef.current = opts.onNotice;
+  const busy = useRef(false);
+
+  const load = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const b = getBackend();
+      let list = await b.fetchSongs();
+      let msg: string | null = null;
+      if (isUntouchedSampleList(list)) {
+        list = GAME_NIGHT_SONGS.map(s => ({ ...s }));
+        const { error } = await b.saveSongs(list);
+        msg = error ?? `Your ${list.length} game night songs are loaded`;
+      }
+      const g = gameRef.current;
+      if (g && g.songListVersion < SONG_LIST_VERSION) {
+        const up = upgradeSongList(list, g.songListVersion);
+        if (up.changed) {
+          list = up.list;
+          const { error } = await b.saveSongs(list);
+          msg = error ?? 'Song timings updated';
+        }
+        await apply(s => (s.songListVersion < SONG_LIST_VERSION ? { ...s, songListVersion: SONG_LIST_VERSION } : null));
+      }
+      setSongs(list);
+      if (msg) noticeRef.current?.(msg);
+    } finally {
+      busy.current = false;
+    }
+  }, [apply]);
+
+  const hasGame = !!game;
+  useEffect(() => {
+    if (ready && hasGame) void load();
+  }, [ready, hasGame, load]);
+  useResync(() => {
+    if (opts.resync && ready && gameRef.current) void load();
+  }, 10000);
+
+  return { songs, setSongs, reload: load };
 }
 
 /** Marks this account as a host in the game, so player screens hide it. */

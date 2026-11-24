@@ -52,6 +52,7 @@ export function initialState(): GameState {
     totalRounds: TOTAL_ROUNDS,
     winnerId: null,
     playOnDevices: false,
+    songListVersion: 0,
     hostIds: [],
     version: 0,
   };
@@ -78,6 +79,7 @@ export function normalizeState(raw: unknown): GameState {
     round,
     points: r.points ?? {},
     playOnDevices: r.playOnDevices === true,
+    songListVersion: typeof r.songListVersion === 'number' ? r.songListVersion : 0,
     hostIds: Array.isArray(r.hostIds) ? r.hostIds.filter(x => typeof x === 'string') : [],
     version: typeof r.version === 'number' ? r.version : 0,
   };
@@ -268,7 +270,7 @@ export function crownWinner(s: GameState, playerId: string): GameState {
 
 export function resetGame(s: GameState): GameState {
   const fresh = initialState();
-  return { ...fresh, game1: { ...fresh.game1, name: s.game1.name || fresh.game1.name }, round: freshRound(0, fresh.totalRounds), hostIds: s.hostIds, version: s.version };
+  return { ...fresh, game1: { ...fresh.game1, name: s.game1.name || fresh.game1.name }, round: freshRound(0, fresh.totalRounds), hostIds: s.hostIds, songListVersion: s.songListVersion, playOnDevices: s.playOnDevices, version: s.version };
 }
 
 /* ------------------------------------------------------------------ */

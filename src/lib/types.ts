@@ -61,6 +61,8 @@ export type GameState = {
   winnerId: string | null;
   /** Play the songs on every player's own device (true) or only on the Stage (false). */
   playOnDevices: boolean;
+  /** Which one-time song list upgrades have been applied (see songLists.ts). */
+  songListVersion: number;
   /** Accounts that opened the Stage or Answer sheet. They run the game and are hidden from player lists. */
   hostIds: string[];
   version: number;

@@ -217,7 +217,14 @@ function PlayerAudio({ game }: { game: GameState }) {
   return (
     <section className="card" aria-label="Song on this device">
       <div className="row" style={{ alignItems: 'center' }}>
-        {media.isYouTube && <div className="yt-box" ref={box} />}
+        {media.isYouTube && (
+          <div className="yt-wrap">
+            <div className="yt-box" ref={box} />
+            <div className="yt-cover" aria-hidden="true">
+              ♪
+            </div>
+          </div>
+        )}
         <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
           <span className="eyebrow">Song on this phone</span>
           <b>
@@ -231,7 +238,7 @@ function PlayerAudio({ game }: { game: GameState }) {
                     ? 'Paused'
                     : 'Ready. It plays when the host presses Play.'}
           </b>
-          {media.isYouTube && <span className="hint">On iPhone, if you hear nothing, tap the video once.</span>}
+          {media.isYouTube && <span className="hint">On iPhone, if you hear nothing, tap the ♪ box once.</span>}
         </div>
       </div>
       {!unlocked && (

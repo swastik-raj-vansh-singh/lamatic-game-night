@@ -315,7 +315,14 @@ export const SongPlayer = forwardRef<SongPlayerHandle, { song: Song | null }>(fu
 
   return (
     <div className="player-card" aria-live="polite">
-      {media.isYouTube && <div className="yt-box" ref={box} />}
+      {media.isYouTube && (
+        <div className="yt-wrap">
+          <div className="yt-box" ref={box} />
+          <div className="yt-cover" aria-hidden="true">
+            ♪
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
         <span className="eyebrow">Song clip</span>
         <span style={{ fontWeight: 700, color: status === 'error' || status === 'nosource' ? 'var(--coral)' : status === 'notimed' ? 'var(--bulb)' : undefined }}>
