@@ -279,7 +279,7 @@ export default function HostPage() {
             )}
 
             <div className="table-wrap">
-              <table style={{ minWidth: 980 }}>
+              <table className="stack" style={{ minWidth: 980 }}>
                 <thead>
                   <tr>
                     <th>#</th>
@@ -296,7 +296,7 @@ export default function HostPage() {
                     const st = songStatus(s);
                     return (
                       <tr key={s.round}>
-                        <td>
+                        <td data-label="Order">
                           <span className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                             <b className="num" style={{ minWidth: '2ch' }}>
                               {s.round}
@@ -315,16 +315,16 @@ export default function HostPage() {
                             </button>
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Song">
                           <input aria-label={`Song ${s.round} title`} value={s.title} onChange={e => update(s.round, { title: e.target.value })} />
                         </td>
-                        <td>
+                        <td data-label="Artist">
                           <input aria-label={`Song ${s.round} artist`} value={s.artist} onChange={e => update(s.round, { artist: e.target.value })} />
                         </td>
-                        <td>
+                        <td data-label="Audio file or YouTube link">
                           <input aria-label={`Song ${s.round} audio`} value={s.source} onChange={e => update(s.round, { source: e.target.value })} />
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+                        <td data-label="Clip">
                           <span className="num muted" style={{ marginRight: 8 }}>
                             {s.stop > s.start ? `${s.start}s → ${s.stop}s` : '—'}
                           </span>
@@ -332,7 +332,7 @@ export default function HostPage() {
                             Set timing
                           </button>
                         </td>
-                        <td>
+                        <td data-label="Correct next line">
                           <input
                             aria-label={`Song ${s.round} correct line`}
                             placeholder="Type the line players must sing"
@@ -340,7 +340,7 @@ export default function HostPage() {
                             onChange={e => update(s.round, { line: e.target.value })}
                           />
                         </td>
-                        <td>
+                        <td data-label="Status">
                           <span className="chip" style={{ color: st.ok ? 'var(--teal)' : 'var(--coral)' }}>
                             {st.label}
                           </span>
@@ -376,7 +376,7 @@ export default function HostPage() {
             </div>
             <p className="hint">Fix any score with − and +. Remove people who shouldn&apos;t be here.</p>
             <div className="table-wrap">
-              <table>
+              <table className="stack">
                 <thead>
                   <tr>
                     <th>#</th>
@@ -392,11 +392,11 @@ export default function HostPage() {
                   {ranked.map(({ player: p, points, rank }) => (
                     <tr key={p.id}>
                       <td className="num">{rank}</td>
-                      <td>
+                      <td data-label="Player">
                         <span aria-hidden="true">{p.avatar}</span> <b>{p.displayName}</b>
                       </td>
-                      <td className="muted">{p.email}</td>
-                      <td>
+                      <td data-label="Email" className="muted">{p.email}</td>
+                      <td data-label="Points">
                         <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                           <button type="button" className="ghost small" aria-label={`Take a point from ${p.displayName}`} onClick={() => apply(s => adjustPoints(s, p.id, -1))}>
                             −
