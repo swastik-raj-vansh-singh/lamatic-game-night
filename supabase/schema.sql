@@ -177,14 +177,17 @@ insert into public.songs (round, title, artist, source, start_sec, stop_sec, ans
 on conflict (round) do nothing;
 
 -- ---------------------------------------------------------------------
--- 6. Prize wheel: the server picks the slice; the winner (or the host) spins once
+-- 6. Prize wheel: the winner (or the host) spins twice. The first spin lands on
+--    "Better luck next time", the second on the Zomato voucher (Gift 3).
 -- ---------------------------------------------------------------------
 create table if not exists public.wheel_spins (
-  id       int primary key default 1 check (id = 1),
+  id       int primary key default 1,
   segment  int not null check (segment between 0 and 4),
   spun_by  uuid not null,
   spun_at  timestamptz not null default now()
 );
+alter table public.wheel_spins drop constraint if exists wheel_spins_id_check;
+alter table public.wheel_spins add constraint wheel_spins_id_check check (id between 1 and 2);
 alter table public.wheel_spins enable row level security;
 revoke insert, update, delete on public.wheel_spins from anon, authenticated;
 grant select on public.wheel_spins to authenticated;
@@ -199,6 +202,7 @@ returns int language plpgsql security definer set search_path = public as $$
 declare
   v_state jsonb;
   v_segment int;
+  v_count int;
 begin
   select state into v_state from public.game_state where id = 1;
   if v_state ->> 'phase' is distinct from 'wheel' then
@@ -210,11 +214,20 @@ begin
   if v_state ->> 'winnerId' is distinct from auth.uid()::text and not public.is_host() then
     raise exception 'Only the winner or the host can spin the wheel';
   end if;
-  v_segment := floor(random() * 5)::int;  -- 0 Gift 1, 1 miss, 2 Gift 2, 3 Gift 3, 4 miss
-  insert into public.wheel_spins (id, segment, spun_by) values (1, v_segment, auth.uid())
+  select count(*) into v_count from public.wheel_spins;
+  if v_count >= 2 then
+    raise exception 'The wheel has already been spun';
+  end if;
+  -- Slices: 0 Gift 1, 1 miss, 2 Gift 2, 3 Gift 3 (Zomato), 4 miss
+  if v_count = 0 then
+    v_segment := case when random() < 0.5 then 1 else 4 end;
+  else
+    v_segment := 3;
+  end if;
+  insert into public.wheel_spins (id, segment, spun_by) values (v_count + 1, v_segment, auth.uid())
   on conflict (id) do nothing;
   if not found then
-    raise exception 'The wheel has already been spun';
+    raise exception 'The wheel is already spinning';
   end if;
   return v_segment;
 end $$;
@@ -227,7 +240,7 @@ begin
   if not public.is_host() then
     raise exception 'Only the host can reset the wheel';
   end if;
-  delete from public.wheel_spins where id = 1;
+  delete from public.wheel_spins;
 end $$;
 revoke all on function public.reset_wheel() from public, anon;
 grant execute on function public.reset_wheel() to authenticated;

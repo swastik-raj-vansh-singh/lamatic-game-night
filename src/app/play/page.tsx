@@ -1,15 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PrizeReveal } from '@/components/PrizeReveal';
 import { useMediaSource } from '@/components/SongPlayer';
-import { Wheel } from '@/components/Wheel';
+import { WheelPanel } from '@/components/WheelPanel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
 import Link from 'next/link';
 import { Loading, TopBar } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
 import { currentAttempt, playersOnly, sortBuzzes } from '@/lib/game';
-import { useBuzzes, useGameState, useGate, useWheel } from '@/lib/hooks';
+import { useBuzzes, useGameState, useGate } from '@/lib/hooks';
 import { sfx } from '@/lib/sfx';
 import type { Buzz, GameState, Playback, Player } from '@/lib/types';
 
@@ -250,56 +249,6 @@ function PlayerAudio({ game }: { game: GameState }) {
   );
 }
 
-function WheelPhase({ game, me, players }: { game: GameState; me: Player; players: Player[] }) {
-  const { spin, fresh } = useWheel();
-  const [local, setLocal] = useState<{ segment: number } | null>(null);
-  const [showPrize, setShowPrize] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const isWinner = game.winnerId === me.id;
-  const winner = players.find(p => p.id === game.winnerId);
-  const segment = spin?.segment ?? local?.segment ?? null;
-  const seed = segment === null ? null : `${segment}-${game.winnerId}`;
-
-  return (
-    <section className="card" style={{ justifyItems: 'center', textAlign: 'center', gap: 18 }}>
-      <p className="eyebrow">The finale</p>
-      <h2>{isWinner ? 'You won! Spin for your prize' : `${winner?.displayName ?? 'The winner'} is spinning the wheel`}</h2>
-      <p className="muted">Three mystery gifts. Two heartbreaks. One spin.</p>
-      <Wheel segment={segment} seed={seed} animate={fresh || !!local} onDone={() => setShowPrize(true)} />
-      {isWinner && segment === null && (
-        <button
-          type="button"
-          className="big"
-          disabled={busy}
-          onClick={async () => {
-            sfx.unlock();
-            setBusy(true);
-            setError(null);
-            const res = await getBackend().spin();
-            setBusy(false);
-            if (res.error) setError(res.error);
-            else if (typeof res.segment === 'number') setLocal({ segment: res.segment });
-          }}
-        >
-          {busy ? 'Spinning…' : 'Spin the wheel'}
-        </button>
-      )}
-      {segment !== null && !fresh && !local && (
-        <button type="button" className="ghost" onClick={() => setShowPrize(true)}>
-          See the result
-        </button>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {showPrize && segment !== null && <PrizeReveal segment={segment} winnerName={winner?.displayName ?? 'The winner'} isWinner={isWinner} onClose={() => setShowPrize(false)} />}
-    </section>
-  );
-}
-
 export default function PlayPage() {
   const { me, players, host, ready } = useGate({ needPlayer: true });
   const { game } = useGameState();
@@ -357,7 +306,7 @@ export default function PlayPage() {
           </>
         )}
         {game.phase === 'leaderboard' && <FinalResults game={game} players={visible} meId={me.id} />}
-        {game.phase === 'wheel' && <WheelPhase game={game} me={me} players={visible} />}
+        {game.phase === 'wheel' && <WheelPanel game={game} players={visible} canSpin={game.winnerId === me.id} viewerIsWinner={game.winnerId === me.id} />}
       </main>
     </>
   );

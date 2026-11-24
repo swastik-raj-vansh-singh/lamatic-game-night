@@ -21,7 +21,23 @@ export async function celebrate() {
   }
 }
 
-export function PrizeReveal({ segment, winnerName, isWinner, onClose }: { segment: number; winnerName: string; isWinner: boolean; onClose: () => void }) {
+export function PrizeReveal({
+  segment,
+  winnerName,
+  isWinner,
+  onClose,
+  spinAgain = false,
+  onSpinAgain,
+}: {
+  segment: number;
+  winnerName: string;
+  isWinner: boolean;
+  onClose: () => void;
+  /** A miss that still has a spin left. */
+  spinAgain?: boolean;
+  /** Shown as a "Spin again" button when this viewer may spin. */
+  onSpinAgain?: () => void;
+}) {
   const s = SEGMENTS[segment];
   const isGift = s?.kind === 'gift';
   const [opened, setOpened] = useState(false);
@@ -73,13 +89,35 @@ export function PrizeReveal({ segment, winnerName, isWinner, onClose }: { segmen
             ? isWinner
               ? 'The host will send your voucher code to you privately.'
               : `${winnerName} wins a ${s.prize}!`
-            : isWinner
-              ? 'The wheel has spoken. You still won game night.'
-              : `So close, ${winnerName}. Still the champion.`}
+            : spinAgain
+              ? isWinner
+                ? "So close! Don't worry, you get one more spin."
+                : `So close, ${winnerName}! One more spin coming…`
+              : isWinner
+                ? 'The wheel has spoken. You still won game night.'
+                : `So close, ${winnerName}. Still the champion.`}
         </p>
-        <button ref={closeRef} type="button" className="ghost" onClick={onClose}>
-          Close
-        </button>
+        {spinAgain && onSpinAgain ? (
+          <div className="row" style={{ justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="big prize-line"
+              onClick={() => {
+                onClose();
+                onSpinAgain();
+              }}
+            >
+              Spin again!
+            </button>
+            <button ref={closeRef} type="button" className="ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <button ref={closeRef} type="button" className="ghost" onClick={onClose}>
+            Close
+          </button>
+        )}
       </div>
     </div>
   );

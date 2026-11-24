@@ -117,7 +117,7 @@ export function useWheel() {
         setState(prev => {
           if (!spin) return { spin: null, fresh: false, loaded: true };
           if (prev.spin && prev.spin.spunAt === spin.spunAt) return prev;
-          return { spin, fresh: !wasFirst && !prev.spin, loaded: true };
+          return { spin, fresh: !wasFirst, loaded: true };
         });
       });
   }, []);

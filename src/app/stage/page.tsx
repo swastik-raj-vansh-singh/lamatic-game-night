@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PrizeReveal, celebrate } from '@/components/PrizeReveal';
+import { celebrate } from '@/components/PrizeReveal';
 import { SongPlayer, youtubeId, type PlayRange, type SongPlayerHandle } from '@/components/SongPlayer';
-import { Wheel } from '@/components/Wheel';
+import { WheelPanel } from '@/components/WheelPanel';
 import { BuzzList, FinalResults, Game1View, LiveBoard, LobbyView, RoundHeader, RoundStatusBoard } from '@/components/views';
 import { Bulbs, ConfirmButton, DemoBanner, Loading, SoundToggle } from '@/components/ui';
 import { getBackend } from '@/lib/backend';
@@ -127,10 +127,8 @@ export default function StagePage() {
   const { game, empty } = useGameState();
   const { apply, error } = useHostActions(game);
   const buzzes = useBuzzes(game?.phase === 'round' ? game.round.key : null);
-  const { spin, fresh } = useWheel();
+  const { spin } = useWheel();
   const { songs } = useSongs(ready, game, apply, { resync: true });
-  const [showPrize, setShowPrize] = useState(false);
-  const [localSpin, setLocalSpin] = useState<number | null>(null);
   const [spinError, setSpinError] = useState<string | null>(null);
   const [winnerPick, setWinnerPick] = useState('');
   const [origin, setOrigin] = useState('');
@@ -187,10 +185,6 @@ export default function StagePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundDone]);
 
-  useEffect(() => {
-    if (!spin) setLocalSpin(null);
-  }, [spin]);
-
   // Demo mode: test players buzz on their own so you can try the flow alone.
   const botWindow = game?.phase === 'round' && (game.round.status === 'open' || game.round.status === 'answering') ? game.round.key : null;
   useEffect(() => {
@@ -207,8 +201,6 @@ export default function StagePage() {
   const isLast = r.index >= game.totalRounds - 1;
   const winner = players.find(p => p.id === game.winnerId);
   const chosenWinner = winnerPick || ranked[0]?.player.id || '';
-  const segment = spin?.segment ?? localSpin;
-  const seed = segment === null ? null : `${segment}-${game.winnerId}`;
 
   const goPhase = (phase: GameState['phase']) =>
     apply(s => {
@@ -366,52 +358,32 @@ export default function StagePage() {
         )}
 
         {game.phase === 'wheel' && (
-          <section className="card" style={{ justifyItems: 'center', textAlign: 'center', gap: 18 }}>
-            <p className="eyebrow">The finale</p>
-            <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.4rem)' }}>{winner ? `${winner.avatar} ${winner.displayName}` : 'Pick a winner first'}</h2>
-            <p className="muted">{segment !== null ? 'The wheel has spoken.' : 'Three mystery gifts, two heartbreaks, one spin.'}</p>
-            <Wheel segment={segment} seed={seed} animate={fresh || localSpin !== null} onDone={() => setShowPrize(true)} />
-            {segment === null ? (
-              <button
-                type="button"
-                className="big"
-                disabled={!winner}
-                onClick={async () => {
-                  sfx.unlock();
-                  setSpinError(null);
-                  const res = await backend.spin();
-                  if (res.error) setSpinError(res.error);
-                  else if (typeof res.segment === 'number') setLocalSpin(res.segment);
-                }}
-              >
-                Spin for {winner?.displayName ?? 'the winner'}
-              </button>
+          <>
+            {winner ? (
+              <WheelPanel game={game} players={players} canSpin viewerIsWinner={false} big />
             ) : (
-              <div className="row" style={{ justifyContent: 'center' }}>
-                <button type="button" className="ghost" onClick={() => setShowPrize(true)}>
-                  Show the prize
-                </button>
-                <ConfirmButton
-                  label="Reset the wheel"
-                  confirmLabel="Click again to reset"
-                  onConfirm={async () => {
-                    const { error } = await backend.resetWheel();
-                    if (error) setSpinError(error);
-                    setLocalSpin(null);
-                  }}
-                />
-              </div>
+              <section className="card">
+                <h2>Pick a winner first</h2>
+                <p className="muted">Go to step 4 (Results) and open the wheel for the winner.</p>
+              </section>
             )}
-            <p className="hint">The winner can also spin from their own phone.</p>
+            <div className="row" style={{ justifyContent: 'center' }}>
+              <p className="hint">The winner can also spin from their own phone. The first spin is a miss, the second wins the voucher.</p>
+              <ConfirmButton
+                label="Reset the wheel"
+                confirmLabel="Click again to reset"
+                onConfirm={async () => {
+                  const { error } = await backend.resetWheel();
+                  if (error) setSpinError(error);
+                }}
+              />
+            </div>
             {spinError && (
               <p className="error" role="alert">
                 {spinError}
               </p>
             )}
-            {showPrize && segment !== null && (
-              <PrizeReveal segment={segment} winnerName={winner?.displayName ?? 'Our champion'} isWinner={false} onClose={() => setShowPrize(false)} />
-            )}
-          </section>
+          </>
         )}
 
         {error && (
@@ -509,7 +481,11 @@ export default function StagePage() {
               </>
             )}
             {game.phase === 'leaderboard' && <span className="chip">Pick the winner above, then open the wheel</span>}
-            {game.phase === 'wheel' && <span className="chip">{segment !== null ? 'Spun! Send the voucher privately.' : `Waiting for ${winner?.displayName ?? 'the winner'} to spin`}</span>}
+            {game.phase === 'wheel' && (
+              <span className="chip">
+                {!spin ? `Waiting for ${winner?.displayName ?? 'the winner'} to spin` : spin.attempt < 2 ? 'First spin done: one more to go' : 'Won! Send the voucher privately.'}
+              </span>
+            )}
           </div>
           <div className="group">
             {game.phase === 'round' && (

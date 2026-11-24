@@ -24,6 +24,7 @@ type DemoDB = {
   buzzes: Buzz[];
   songs: Song[];
   wheel: WheelSpin;
+  spins?: NonNullable<WheelSpin>[];
   results: RoundLog[];
   seq: number;
 };
@@ -248,7 +249,8 @@ class DemoBackend implements Backend {
   }
 
   async fetchWheel() {
-    return this.read().wheel;
+    const spins = this.read().spins ?? [];
+    return spins.length ? spins[spins.length - 1] : null;
   }
 
   subscribeWheel(cb: () => void) {
@@ -262,11 +264,11 @@ class DemoBackend implements Backend {
     if (s?.phase !== 'wheel') return { error: 'The wheel is not open yet.' };
     if (!s.winnerId) return { error: 'Pick a winner first.' };
     if (!me || (s.winnerId !== me.id && !me.host)) return { error: 'Only the winner or the host can spin the wheel.' };
-    if (db.wheel) return { error: 'The wheel has already been spun.' };
-    const a = new Uint32Array(1);
-    crypto.getRandomValues(a);
-    const segment = a[0] % 5;
-    db.wheel = { segment, spunBy: me.id, spunAt: new Date().toISOString() };
+    const spins = db.spins ?? [];
+    if (spins.length >= 2) return { error: 'The wheel has already been spun.' };
+    // First spin: "Better luck next time". Second spin: the Zomato voucher (Gift 3).
+    const segment = spins.length === 0 ? (Math.random() < 0.5 ? 1 : 4) : 3;
+    db.spins = [...spins, { segment, spunBy: me.id, spunAt: new Date().toISOString(), attempt: spins.length + 1 }];
     this.write(db);
     return { segment };
   }
@@ -274,6 +276,7 @@ class DemoBackend implements Backend {
   async resetWheel(): Promise<Result> {
     const db = this.read();
     db.wheel = null;
+    db.spins = [];
     this.write(db);
     return {};
   }

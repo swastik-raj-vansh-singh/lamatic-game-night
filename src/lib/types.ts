@@ -86,4 +86,5 @@ export type Song = {
   line: string;
 };
 
-export type WheelSpin = { segment: number; spunBy: string; spunAt: string } | null;
+/** The latest spin. `attempt` is 1 for the first spin, 2 for the second. */
+export type WheelSpin = { segment: number; spunBy: string; spunAt: string; attempt: number } | null;

@@ -32,6 +32,9 @@ export function landingFraction(seed: string): number {
   return 0.2 + ((h >>> 0) % 1000) / 1000 * 0.6;
 }
 
+/** How many spins the winner gets: the first is always a miss, the second wins. */
+export const MAX_SPINS = 2;
+
 export function segmentLabel(i: number): string {
   const s = SEGMENTS[i];
   if (!s) return '';

@@ -10,7 +10,7 @@ import type { Backend, Result, RoundLog, Unsubscribe } from './types';
 type PlayerRow = { id: string; email: string; display_name: string; avatar: string; joined_at: string };
 type BuzzRow = { id: number; round_key: string; player_id: string; reaction_ms: number | null; created_at: string };
 type SongRow = { round: number; title: string; artist: string; source: string; start_sec: number; stop_sec: number; answer_line: string };
-type WheelRow = { segment: number; spun_by: string; spun_at: string };
+type WheelRow = { id: number; segment: number; spun_by: string; spun_at: string };
 
 const toPlayer = (r: PlayerRow): Player => ({
   id: r.id,
@@ -213,9 +213,9 @@ class SupabaseBackend implements Backend {
   }
 
   async fetchWheel(): Promise<WheelSpin> {
-    const { data } = await this.sb.from('wheel_spins').select('*').eq('id', 1).maybeSingle();
-    const r = data as WheelRow | null;
-    return r ? { segment: r.segment, spunBy: r.spun_by, spunAt: r.spun_at } : null;
+    const { data } = await this.sb.from('wheel_spins').select('*').order('id', { ascending: false }).limit(1);
+    const r = ((data as WheelRow[] | null) ?? [])[0];
+    return r ? { segment: r.segment, spunBy: r.spun_by, spunAt: r.spun_at, attempt: r.id } : null;
   }
 
   subscribeWheel(cb: () => void): Unsubscribe {
